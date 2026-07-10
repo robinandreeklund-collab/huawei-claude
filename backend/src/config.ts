@@ -25,6 +25,18 @@ export const config = {
   demoBudgetUsd: Number(process.env.DEMO_BUDGET_USD ?? 1.0),
   rateLimitPerMin: Number(process.env.RATE_LIMIT_PER_MIN ?? 12),
 
+  // Huawei Push Kit (background notifications to the watch). When Claude finishes
+  // a turn while the app is backgrounded/disconnected, the backend pushes a
+  // notification so the watch vibrates and alerts. Real integration, gated on
+  // these credentials (from AppGallery Connect). Unset => logs instead of sends.
+  push: {
+    appId: process.env.HUAWEI_PUSH_APP_ID || "",
+    clientId: process.env.HUAWEI_PUSH_CLIENT_ID || "",
+    clientSecret: process.env.HUAWEI_PUSH_CLIENT_SECRET || "",
+    // Idle grace before a detached (backgrounded) session's Claude run is torn down.
+    detachedTtlMs: Number(process.env.DETACHED_TTL_MS ?? 10 * 60 * 1000),
+  },
+
   // Speech-to-text (fas 2). Any OpenAI-compatible /audio/transcriptions endpoint
   // works: OpenAI Whisper, a self-hosted whisper.cpp server, Groq, etc.
   stt: {
@@ -37,3 +49,6 @@ export const config = {
 
 export const sttConfigured = (): boolean =>
   Boolean(config.stt.apiUrl && config.stt.apiKey);
+
+export const pushConfigured = (): boolean =>
+  Boolean(config.push.appId && config.push.clientId && config.push.clientSecret);

@@ -24,6 +24,8 @@ webbläsaren idag — ingen klocka behövs ännu.
 | **Innehållsmoderering** (filter-hook på svar) | `src/moderation.ts` | ✅ (pluggbar, compliance R1) |
 | **Samtycke + kontoradering + rapport** | `src/auth.ts` + `src/server.ts` | ✅ verifierat (compliance R1/R4) |
 | **Röst / STT** (ljud → text → prompt) | `src/stt.ts` | ✅ pipeline verifierad; kräver STT-nyckel |
+| **Persistent session** (överlever nedkoppling, buffrar, återkopplar) | `src/user-session.ts` | ✅ verifierad |
+| **Push Kit + bakgrundsnotis** (buzz när Claude blir klar) | `src/pushkit.ts` | ✅ verifierad; kräver Push-creds. Klock-sida: `../docs/ondevice-notifications.md` |
 
 ## Kör lokalt
 
@@ -83,6 +85,10 @@ svarar servern `stt_unavailable` och klienten faller tillbaka på textinmatning.
 | `STT_API_KEY` | — | Nyckel för STT |
 | `STT_MODEL` | `whisper-1` | STT-modell |
 | `STT_LANGUAGE` | `sv` | Språk för transkribering |
+| `HUAWEI_PUSH_APP_ID` | — | AGC App ID (Push Kit) |
+| `HUAWEI_PUSH_CLIENT_ID` | — | OAuth client id (Push Kit) |
+| `HUAWEI_PUSH_CLIENT_SECRET` | — | OAuth client secret (Push Kit) |
+| `DETACHED_TTL_MS` | `600000` | Hur länge en frånkopplad session lever innan Claude rivs |
 
 ## WebSocket-protokoll
 
@@ -95,6 +101,9 @@ Klient → server:
 { "type": "audio_chunk", "data": "<base64>" }
 { "type": "audio_end" }
 { "type": "report",  "text": "...", "reason": "user_report" }
+{ "type": "register_push", "pushToken": "<Huawei Push Kit device token>" }
+{ "type": "background" }
+{ "type": "foreground" }
 ```
 Server → klient: `authed` (`consented`, `demoMode`) · `needs_consent` · `consented` ·
 `accepted` · `assistant` (`text`, ev. `filtered`) · `tool_use` · `needs_confirmation` ·

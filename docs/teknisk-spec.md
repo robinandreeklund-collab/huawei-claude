@@ -284,6 +284,32 @@ Skärmflöde: para (QR) → samtycke → **hem** (tre lägen) → lista → chat
 
 ---
 
+## 12. Aviseringar, haptik och bakgrund
+
+Claude Code-turer kan ta minuter — därför är "sänk armen, få en buzz när det är
+klart" en kärnfunktion. Nyckelbegränsning: **HarmonyOS håller inte appar vid liv i
+bakgrunden**, så en WebSocket kan inte hållas öppen där. Lösning:
+
+- **Förgrund (app öppen):** WSS levererar live; appen vibrerar (Vibrator Kit) och
+  kan visa lokal avisering (Notification Kit).
+- **Bakgrund / annan app / skärm släckt:** backend skickar en **push via Huawei
+  Push Kit** när turen blir klar → klockan vibrerar + avisering → tryck djuplänkar
+  in i chatten.
+
+**Backend-implementationen är byggd och verifierad** (server-sidan):
+- Sessionen ägs av ett register per användare och **överlever att socketen dör** —
+  en pågående Claude-tur körs klart även om appen backgrundar.
+- Events som sänds medan appen är frånkopplad **buffras** och flushas vid
+  återanslutning (appen kommer ikapp).
+- Vid `turn_done` medan frånkopplad skickas en **push** (Push Kit REST, gated på
+  `HUAWEI_PUSH_*`-credentials; loggar annars).
+- WSS-kommandon: `register_push` (enhetens push-token), `background`/`foreground`.
+
+Klock-sidan (ArkTS) — haptik, Notification Kit, push-mottagning, djuplänk — är
+färdig kod redo att koppla in, se [`ondevice-notifications.md`](ondevice-notifications.md).
+
+---
+
 ## Referenser
 
 - [Getting Started with HarmonyOS Wearable App Development](https://developer.huawei.com/consumer/en/multidevice/wearables/get-started/)

@@ -136,6 +136,16 @@ export function isValidToken(token: string | undefined): boolean {
 const consented = new Set<string>();
 const spentUsd = new Map<string, number>();
 const rateHits = new Map<string, number[]>(); // token -> recent request timestamps
+const pushTokens = new Map<string, string>(); // session token -> device push token
+
+/** Register the watch's Huawei Push Kit device token for this user. */
+export function setPushToken(token: string, pushToken: string): void {
+  if (sessions.has(token)) pushTokens.set(token, pushToken);
+}
+
+export function getPushToken(token: string): string | undefined {
+  return pushTokens.get(token);
+}
 
 export function setConsent(token: string): void {
   if (sessions.has(token)) consented.add(token);
@@ -174,6 +184,7 @@ export function deleteAccount(token: string): boolean {
   consented.delete(token);
   spentUsd.delete(token);
   rateHits.delete(token);
+  pushTokens.delete(token);
   for (const [uc, req] of byUserCode) {
     if (req.token === token) {
       byUserCode.delete(uc);

@@ -30,14 +30,15 @@ import {
   isValidToken,
   setConsent,
   hasConsent,
-  addSpend,
   isOverBudget,
   allowRequest,
   deleteAccount,
   addReport,
+  setPushToken,
 } from "./auth.js";
-import { ClaudeSession } from "./claude-session.js";
+import { getOrCreateSession, disposeSession, type UserSession } from "./user-session.js";
 import { transcribe, SttNotConfiguredError } from "./stt.js";
+import { pushConfigured } from "./config.js";
 
 const execFileP = promisify(execFile);
 const PUBLIC_DIR = join(dirname(fileURLToPath(import.meta.url)), "..", "public");
@@ -150,7 +151,7 @@ const server = createServer(async (req, res) => {
 
   // Lets the client learn which features are available (mic, demo banner).
   if (path === "/meta") {
-    return json(res, 200, { demoMode: config.demoMode, stt: sttConfigured() });
+    return json(res, 200, { demoMode: config.demoMode, stt: sttConfigured(), push: pushConfigured() });
   }
 
   // --- Device flow -------------------------------------------------------
@@ -189,6 +190,7 @@ const server = createServer(async (req, res) => {
   }
   if (path === "/account" && req.method === "DELETE") {
     const { token } = await readBody(req);
+    disposeSession(String(token ?? "")); // stop any running Claude turn
     const existed = deleteAccount(String(token ?? ""));
     return json(res, 200, { deleted: existed });
   }
@@ -211,52 +213,27 @@ const server = createServer(async (req, res) => {
 const wss = new WebSocketServer({ server, path: "/ws" });
 
 wss.on("connection", (ws: WebSocket) => {
-  let session: ClaudeSession | null = null;
+  let us: UserSession | null = null;
   let token = "";
-  let cwd = config.chatsDir; // active working dir (chats dir, a project, or a repo)
-  let contextLabel = "Claude"; // shown in the chat header/status
-  let systemPrompt: string | undefined; // a Project's instructions, when in a project
   let audio: { mime: string; chunks: Buffer[] } | null = null;
 
+  // Direct send for request/response acks (only meaningful while connected).
+  // Claude's streamed events go through us.emit (buffered + pushed when detached).
   const send = (event: Record<string, unknown>) => {
     if (ws.readyState === ws.OPEN) ws.send(JSON.stringify(event));
   };
 
-  // (Re)create the Claude session bound to the current dir, optionally resuming a
-  // past conversation and/or carrying a Project's instructions.
-  const rebuildSession = (resume?: string) => {
-    session?.close();
-    session = new ClaudeSession(send, {
-      cwd,
-      model: config.model,
-      ...(resume ? { resume } : {}),
-      ...(systemPrompt ? { systemPrompt } : {}),
-      onCost: (usd) => addSpend(token, usd),
-      onFiltered: (reason, text) => addReport(`auto:${reason}`, text),
-    });
-  };
-
-  // Common gate for anything that spends model budget: consent, rate, budget.
   const guard = (): boolean => {
-    if (!hasConsent(token)) {
-      send({ type: "needs_consent" });
-      return false;
-    }
-    if (!allowRequest(token, config.rateLimitPerMin)) {
-      send({ type: "error", message: "rate limit — vänta en stund" });
-      return false;
-    }
-    if (config.demoMode && isOverBudget(token, config.demoBudgetUsd)) {
-      send({ type: "error", message: "demo-budget slut" });
-      return false;
-    }
+    if (!hasConsent(token)) { send({ type: "needs_consent" }); return false; }
+    if (!allowRequest(token, config.rateLimitPerMin)) { send({ type: "error", message: "rate limit — vänta en stund" }); return false; }
+    if (config.demoMode && isOverBudget(token, config.demoBudgetUsd)) { send({ type: "error", message: "demo-budget slut" }); return false; }
     return true;
   };
 
   const runPrompt = (text: string) => {
-    if (!session || !guard()) return;
+    if (!us?.claude || !guard()) return;
     send({ type: "accepted" });
-    session.prompt(text);
+    us.claude.prompt(text);
   };
 
   ws.on("message", async (raw, isBinary) => {
@@ -271,11 +248,15 @@ wss.on("connection", (ws: WebSocket) => {
     if (msg.type === "auth") {
       if (isValidToken(msg.token as string | undefined)) {
         token = msg.token as string;
-        cwd = config.chatsDir;
-        contextLabel = "Claude";
-        systemPrompt = undefined;
-        rebuildSession();
-        send({ type: "authed", consented: hasConsent(token), demoMode: config.demoMode });
+        us = getOrCreateSession(token);
+        us.attach(ws); // reconnect flushes anything buffered while away
+        if (!us.claude) {
+          us.cwd = config.chatsDir;
+          us.contextLabel = "Claude";
+          us.systemPrompt = undefined;
+          us.rebuildClaude();
+        }
+        send({ type: "authed", consented: hasConsent(token), demoMode: config.demoMode, push: pushConfigured() });
       } else {
         send({ type: "error", message: "invalid or expired token" });
         ws.close();
@@ -283,13 +264,26 @@ wss.on("connection", (ws: WebSocket) => {
       return;
     }
 
-    if (!session) return send({ type: "error", message: "not authenticated" });
+    if (!us) return send({ type: "error", message: "not authenticated" });
 
     switch (msg.type) {
       case "consent":
         setConsent(token);
         send({ type: "consented" });
         return;
+
+      // Watch registers its Huawei Push Kit device token for background alerts.
+      case "register_push":
+        if (typeof msg.pushToken === "string") {
+          us.pushToken = msg.pushToken;
+          setPushToken(token, msg.pushToken);
+          send({ type: "registered" });
+        }
+        return;
+
+      // App tells us it went to background/foreground so we know when to push.
+      case "background": us.setForeground(false); return;
+      case "foreground": us.setForeground(true); return;
 
       case "prompt":
         if (typeof msg.text === "string") runPrompt(msg.text);
@@ -337,42 +331,42 @@ wss.on("connection", (ws: WebSocket) => {
       }
 
       case "new_chat":
-        cwd = chatsDir();
-        contextLabel = "Nytt samtal";
-        systemPrompt = undefined;
-        rebuildSession();
-        send({ type: "chat_opened", context: contextLabel, kind: "chat" });
+        us.cwd = chatsDir();
+        us.contextLabel = "Nytt samtal";
+        us.systemPrompt = undefined;
+        us.rebuildClaude();
+        send({ type: "chat_opened", context: us.contextLabel, kind: "chat" });
         return;
 
       case "open_chat":
-        cwd = chatsDir();
-        contextLabel = "Samtal";
-        systemPrompt = undefined;
-        rebuildSession(String(msg.id ?? ""));
-        send({ type: "chat_opened", context: contextLabel, kind: "chat" });
+        us.cwd = chatsDir();
+        us.contextLabel = "Samtal";
+        us.systemPrompt = undefined;
+        us.rebuildClaude(String(msg.id ?? ""));
+        send({ type: "chat_opened", context: us.contextLabel, kind: "chat" });
         return;
 
       case "open_project": {
         const proj = await appProject(String(msg.id ?? ""));
         if (!proj) return send({ type: "error", message: "ogiltigt projekt" });
-        cwd = proj.path;
-        contextLabel = proj.name;
-        systemPrompt = proj.instructions || undefined;
-        const last = await listSessions({ dir: cwd, limit: 1 }).catch(() => []);
-        rebuildSession(last[0]?.sessionId);
-        send({ type: "chat_opened", context: contextLabel, kind: "project" });
+        us.cwd = proj.path;
+        us.contextLabel = proj.name;
+        us.systemPrompt = proj.instructions || undefined;
+        const last = await listSessions({ dir: us.cwd, limit: 1 }).catch(() => []);
+        us.rebuildClaude(last[0]?.sessionId);
+        send({ type: "chat_opened", context: us.contextLabel, kind: "project" });
         return;
       }
 
       case "open_code": {
         const repo = codeRepoPath(String(msg.id ?? ""));
         if (!repo) return send({ type: "error", message: "ogiltigt repo" });
-        cwd = repo;
-        contextLabel = String(msg.id);
-        systemPrompt = undefined;
-        const last = await listSessions({ dir: cwd, limit: 1 }).catch(() => []);
-        rebuildSession(last[0]?.sessionId);
-        send({ type: "chat_opened", context: contextLabel, kind: "code" });
+        us.cwd = repo;
+        us.contextLabel = String(msg.id);
+        us.systemPrompt = undefined;
+        const last = await listSessions({ dir: us.cwd, limit: 1 }).catch(() => []);
+        us.rebuildClaude(last[0]?.sessionId);
+        send({ type: "chat_opened", context: us.contextLabel, kind: "code" });
         return;
       }
 
@@ -415,8 +409,10 @@ wss.on("connection", (ws: WebSocket) => {
     }
   });
 
-  ws.on("close", () => session?.close());
-  ws.on("error", () => session?.close());
+  // Socket dropped: keep the Claude turn running server-side so it can finish and
+  // push a notification. The session is torn down only after an idle grace period.
+  ws.on("close", () => us?.detach());
+  ws.on("error", () => us?.detach());
 });
 
 server.listen(config.port, () => {
@@ -425,4 +421,5 @@ server.listen(config.port, () => {
   console.log(`  model:      ${config.model ?? "(SDK default)"}`);
   console.log(`  demoMode:   ${config.demoMode}`);
   console.log(`  stt:        ${sttConfigured() ? "configured" : "not configured"}`);
+  console.log(`  push:       ${pushConfigured() ? "configured" : "not configured (logs instead)"}`);
 });
