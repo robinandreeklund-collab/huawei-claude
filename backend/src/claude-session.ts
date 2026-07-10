@@ -12,8 +12,18 @@ import {
   type SDKMessage,
   type CanUseTool,
 } from "@anthropic-ai/claude-agent-sdk";
+import { moderate, FILTERED_NOTICE } from "./moderation.js";
 
 type Emit = (event: Record<string, unknown>) => void;
+
+interface SessionOpts {
+  cwd: string;
+  model?: string;
+  /** Called with the per-turn cost so the server can enforce a budget cap. */
+  onCost?: (usd: number) => void;
+  /** Called when moderation filters a message, for the report log. */
+  onFiltered?: (reason: string, text: string) => void;
+}
 
 // A minimal push-driven async queue turning discrete prompt() calls into the
 // AsyncIterable the SDK expects.
@@ -61,7 +71,7 @@ export class ClaudeSession {
 
   constructor(
     private readonly emit: Emit,
-    private readonly opts: { cwd: string; model?: string },
+    private readonly opts: SessionOpts,
   ) {}
 
   /** Feed a new user prompt into the running Claude Code conversation. */
@@ -114,13 +124,20 @@ export class ClaudeSession {
       if (Array.isArray(content)) {
         for (const block of content) {
           if (block.type === "text") {
-            this.emit({ type: "assistant", text: block.text });
+            const verdict = moderate(block.text);
+            if (verdict.flagged) {
+              this.opts.onFiltered?.(verdict.reason ?? "flagged", block.text);
+              this.emit({ type: "assistant", text: FILTERED_NOTICE, filtered: true });
+            } else {
+              this.emit({ type: "assistant", text: block.text });
+            }
           } else if (block.type === "tool_use") {
             this.emit({ type: "tool_use", name: block.name, input: block.input });
           }
         }
       }
     } else if (message.type === "result") {
+      this.opts.onCost?.(message.total_cost_usd);
       this.emit({
         type: "result",
         cost: message.total_cost_usd,

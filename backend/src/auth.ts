@@ -128,3 +128,77 @@ export function isValidToken(token: string | undefined): boolean {
   expireStale();
   return sessions.has(token);
 }
+
+// ---------------------------------------------------------------------------
+// Per-session state for compliance: consent (R4), budget cap + rate limit (R2).
+// ---------------------------------------------------------------------------
+
+const consented = new Set<string>();
+const spentUsd = new Map<string, number>();
+const rateHits = new Map<string, number[]>(); // token -> recent request timestamps
+
+export function setConsent(token: string): void {
+  if (sessions.has(token)) consented.add(token);
+}
+
+export function hasConsent(token: string): boolean {
+  return consented.has(token);
+}
+
+/** Accumulate spend and report whether the session is still under its cap. */
+export function addSpend(token: string, usd: number): void {
+  spentUsd.set(token, (spentUsd.get(token) ?? 0) + (usd || 0));
+}
+
+export function isOverBudget(token: string, capUsd: number): boolean {
+  return (spentUsd.get(token) ?? 0) >= capUsd;
+}
+
+/** Sliding-window rate limit. Returns true if the request is allowed. */
+export function allowRequest(token: string, perMinute: number): boolean {
+  const now = Date.now();
+  const windowStart = now - 60_000;
+  const hits = (rateHits.get(token) ?? []).filter((t) => t > windowStart);
+  if (hits.length >= perMinute) {
+    rateHits.set(token, hits);
+    return false;
+  }
+  hits.push(now);
+  rateHits.set(token, hits);
+  return true;
+}
+
+/** Account deletion (R4) — remove the session token and all derived state. */
+export function deleteAccount(token: string): boolean {
+  const existed = sessions.delete(token);
+  consented.delete(token);
+  spentUsd.delete(token);
+  rateHits.delete(token);
+  for (const [uc, req] of byUserCode) {
+    if (req.token === token) {
+      byUserCode.delete(uc);
+      byDeviceCode.delete(req.deviceCode);
+    }
+  }
+  return existed;
+}
+
+// ---------------------------------------------------------------------------
+// Report log (R1) — flagged assistant outputs, kept in memory for the prototype.
+// ---------------------------------------------------------------------------
+
+interface Report {
+  at: number;
+  reason: string;
+  text: string;
+}
+const reports: Report[] = [];
+
+export function addReport(reason: string, text: string): void {
+  reports.push({ at: Date.now(), reason, text: text.slice(0, 2000) });
+  console.log(`[report] ${reason}: ${text.slice(0, 120)}`);
+}
+
+export function reportCount(): number {
+  return reports.length;
+}

@@ -9,10 +9,14 @@ Huawei Watch Ultimate 2 (HarmonyOS NEXT).
 
 ## Status
 
-MVP fas 1 + 3 körbar: en relay-backend som driver Claude Code via Claude Agent
-SDK, med QR-inloggning (device-flow) och WebSocket-streaming. Testbar i
-webbläsaren — ingen klocka behövs ännu. Nästa steg: fas 2 (röst/STT) och fas 4
-(ArkTS-klockappen).
+Körbar relay-backend som driver Claude Code via Claude Agent SDK, med
+QR-inloggning (device-flow), WebSocket-streaming, **röst/STT-pipeline** och en
+**round-watch GUI-demo** i webbläsaren. Backend är härdad mot AppGallery-kraven
+(demo-läge, innehållsmoderering, samtycke, rapport, kontoradering). Testbar i
+webbläsaren — ingen klocka behövs ännu. Nästa steg: fas 4 (ArkTS-klockappen)
+när utvecklarkontot är verifierat.
+
+Prova klock-UX:en: kör backend och öppna **`/watch`** (se `backend/README.md`).
 
 ## Dokument & kod
 

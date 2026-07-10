@@ -1,39 +1,75 @@
 // Relay backend for the Huawei Watch Claude Code client.
 //
-//   HTTP:  device-flow endpoints + the mobile login page + a browser test client
-//   WSS:   authenticated stream that drives a Claude Code session per connection
-//
-// One process serves both HTTP and WebSocket on a single port (Cloud Run friendly).
+//   HTTP:  device-flow endpoints, mobile login page, browser test client,
+//          round-watch GUI demo, compliance endpoints (report, account deletion)
+//   WSS:   authenticated stream that drives a Claude Code session per connection,
+//          with consent gating, budget + rate caps, content moderation, and voice.
 
 import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
-import { readFile, mkdir } from "node:fs/promises";
+import { readFile, mkdir, readdir, writeFile } from "node:fs/promises";
+import { execFile } from "node:child_process";
+import { promisify } from "node:util";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
 import { WebSocketServer, type WebSocket } from "ws";
 import QRCode from "qrcode";
+import { config, sttConfigured } from "./config.js";
 import {
   createDeviceCode,
   approveUserCode,
   pollToken,
   isValidToken,
+  setConsent,
+  hasConsent,
+  addSpend,
+  isOverBudget,
+  allowRequest,
+  deleteAccount,
+  addReport,
 } from "./auth.js";
 import { ClaudeSession } from "./claude-session.js";
+import { transcribe, SttNotConfiguredError } from "./stt.js";
 
-const PORT = Number(process.env.PORT ?? 8080);
-const MODEL = process.env.CLAUDE_MODEL || undefined; // undefined => SDK/CLI default
-const WORKSPACE_DIR = process.env.WORKSPACE_DIR || "/tmp/workspace";
+const execFileP = promisify(execFile);
 const PUBLIC_DIR = join(dirname(fileURLToPath(import.meta.url)), "..", "public");
 
-await mkdir(WORKSPACE_DIR, { recursive: true });
+await mkdir(config.workspaceDir, { recursive: true });
+await seedWorkspaceIfEmpty(config.workspaceDir);
+
+// In demo mode the reviewer's actions must never touch a real repo — a fresh,
+// seeded, isolated workspace is used instead.
+async function seedWorkspaceIfEmpty(dir: string): Promise<void> {
+  try {
+    const entries = await readdir(dir);
+    if (entries.length > 0) return;
+    await writeFile(
+      join(dir, "README.md"),
+      "# Example project\n\nA small sandbox repo for the watch relay demo.\n",
+    );
+    await writeFile(
+      join(dir, "hello.js"),
+      "export const hello = (name) => `Hello, ${name}!`;\n",
+    );
+    await execFileP("git", ["init", "-q"], { cwd: dir }).catch(() => {});
+    await execFileP("git", ["add", "-A"], { cwd: dir }).catch(() => {});
+    await execFileP(
+      "git",
+      ["-c", "user.name=demo", "-c", "user.email=demo@example.com", "commit", "-qm", "seed"],
+      { cwd: dir },
+    ).catch(() => {});
+    console.log(`Seeded example workspace at ${dir}`);
+  } catch {
+    /* best effort */
+  }
+}
 
 // ---------------------------------------------------------------------------
 // HTTP helpers
 // ---------------------------------------------------------------------------
 
 function baseUrl(req: IncomingMessage): string {
-  // Cloud Run terminates TLS and sets x-forwarded-proto.
   const proto = (req.headers["x-forwarded-proto"] as string) || "http";
-  const host = req.headers.host ?? `localhost:${PORT}`;
+  const host = req.headers.host ?? `localhost:${config.port}`;
   return `${proto}://${host}`;
 }
 
@@ -77,16 +113,22 @@ const server = createServer(async (req, res) => {
   const path = url.pathname;
 
   if (req.method === "OPTIONS") {
-    res.writeHead(204, {
-      "access-control-allow-origin": "*",
-      "access-control-allow-methods": "GET,POST,OPTIONS",
-      "access-control-allow-headers": "content-type",
-    }).end();
+    res
+      .writeHead(204, {
+        "access-control-allow-origin": "*",
+        "access-control-allow-methods": "GET,POST,DELETE,OPTIONS",
+        "access-control-allow-headers": "content-type",
+      })
+      .end();
     return;
   }
 
-  // Health check for Cloud Run.
   if (path === "/healthz") return json(res, 200, { ok: true });
+
+  // Lets the client learn which features are available (mic, demo banner).
+  if (path === "/meta") {
+    return json(res, 200, { demoMode: config.demoMode, stt: sttConfigured() });
+  }
 
   // --- Device flow -------------------------------------------------------
   if (path === "/device/code" && req.method === "POST") {
@@ -109,14 +151,29 @@ const server = createServer(async (req, res) => {
   if (path === "/login" && req.method === "GET") {
     return serveFile(res, "login.html", "text/html; charset=utf-8");
   }
-
   if (path === "/login" && req.method === "POST") {
     const { user_code } = await readBody(req);
     const ok = approveUserCode(String(user_code ?? ""));
     return json(res, ok ? 200 : 400, { approved: ok });
   }
 
-  // --- Browser test client ----------------------------------------------
+  // --- Compliance endpoints ---------------------------------------------
+  if (path === "/report" && req.method === "POST") {
+    const { token, text, reason } = await readBody(req);
+    if (!isValidToken(token as string)) return json(res, 401, { error: "unauthorized" });
+    addReport(String(reason ?? "user_report"), String(text ?? ""));
+    return json(res, 200, { reported: true });
+  }
+  if (path === "/account" && req.method === "DELETE") {
+    const { token } = await readBody(req);
+    const existed = deleteAccount(String(token ?? ""));
+    return json(res, 200, { deleted: existed });
+  }
+
+  // --- Clients -----------------------------------------------------------
+  if (path === "/watch") {
+    return serveFile(res, "watch.html", "text/html; charset=utf-8");
+  }
   if (path === "/" || path === "/test") {
     return serveFile(res, "test-client.html", "text/html; charset=utf-8");
   }
@@ -132,13 +189,38 @@ const wss = new WebSocketServer({ server, path: "/ws" });
 
 wss.on("connection", (ws: WebSocket) => {
   let session: ClaudeSession | null = null;
-  let authed = false;
+  let token = "";
+  let audio: { mime: string; chunks: Buffer[] } | null = null;
 
   const send = (event: Record<string, unknown>) => {
     if (ws.readyState === ws.OPEN) ws.send(JSON.stringify(event));
   };
 
-  ws.on("message", (raw) => {
+  // Common gate for anything that spends model budget: consent, rate, budget.
+  const guard = (): boolean => {
+    if (!hasConsent(token)) {
+      send({ type: "needs_consent" });
+      return false;
+    }
+    if (!allowRequest(token, config.rateLimitPerMin)) {
+      send({ type: "error", message: "rate limit — vänta en stund" });
+      return false;
+    }
+    if (config.demoMode && isOverBudget(token, config.demoBudgetUsd)) {
+      send({ type: "error", message: "demo-budget slut" });
+      return false;
+    }
+    return true;
+  };
+
+  const runPrompt = (text: string) => {
+    if (!session || !guard()) return;
+    send({ type: "accepted" });
+    session.prompt(text);
+  };
+
+  ws.on("message", async (raw, isBinary) => {
+    if (isBinary) return; // audio arrives as base64 in JSON, not binary frames
     let msg: Record<string, unknown>;
     try {
       msg = JSON.parse(raw.toString());
@@ -148,9 +230,14 @@ wss.on("connection", (ws: WebSocket) => {
 
     if (msg.type === "auth") {
       if (isValidToken(msg.token as string | undefined)) {
-        authed = true;
-        session = new ClaudeSession(send, { cwd: WORKSPACE_DIR, model: MODEL });
-        send({ type: "authed" });
+        token = msg.token as string;
+        session = new ClaudeSession(send, {
+          cwd: config.workspaceDir,
+          model: config.model,
+          onCost: (usd) => addSpend(token, usd),
+          onFiltered: (reason, text) => addReport(`auto:${reason}`, text),
+        });
+        send({ type: "authed", consented: hasConsent(token), demoMode: config.demoMode });
       } else {
         send({ type: "error", message: "invalid or expired token" });
         ws.close();
@@ -158,13 +245,54 @@ wss.on("connection", (ws: WebSocket) => {
       return;
     }
 
-    if (!authed || !session) {
-      return send({ type: "error", message: "not authenticated" });
-    }
+    if (!session) return send({ type: "error", message: "not authenticated" });
 
-    if (msg.type === "prompt" && typeof msg.text === "string") {
-      send({ type: "accepted" });
-      session.prompt(msg.text);
+    switch (msg.type) {
+      case "consent":
+        setConsent(token);
+        send({ type: "consented" });
+        return;
+
+      case "prompt":
+        if (typeof msg.text === "string") runPrompt(msg.text);
+        return;
+
+      case "report":
+        addReport(String(msg.reason ?? "user_report"), String(msg.text ?? ""));
+        send({ type: "reported" });
+        return;
+
+      // --- Voice pipeline (fas 2) -----------------------------------------
+      case "audio_start":
+        audio = { mime: String(msg.mime ?? "audio/webm"), chunks: [] };
+        return;
+
+      case "audio_chunk":
+        if (audio && typeof msg.data === "string") {
+          audio.chunks.push(Buffer.from(msg.data, "base64"));
+        }
+        return;
+
+      case "audio_end": {
+        if (!audio) return;
+        const buf = Buffer.concat(audio.chunks);
+        const mime = audio.mime;
+        audio = null;
+        if (!guard()) return;
+        if (!sttConfigured()) {
+          return send({ type: "stt_unavailable" });
+        }
+        send({ type: "transcribing" });
+        try {
+          const text = await transcribe(buf, mime);
+          send({ type: "transcript", text });
+          if (text) runPrompt(text);
+        } catch (err) {
+          if (err instanceof SttNotConfiguredError) send({ type: "stt_unavailable" });
+          else send({ type: "error", message: "transkribering misslyckades" });
+        }
+        return;
+      }
     }
   });
 
@@ -172,8 +300,10 @@ wss.on("connection", (ws: WebSocket) => {
   ws.on("error", () => session?.close());
 });
 
-server.listen(PORT, () => {
-  console.log(`Backend listening on :${PORT}`);
-  console.log(`  workspace: ${WORKSPACE_DIR}`);
-  console.log(`  model:     ${MODEL ?? "(SDK default)"}`);
+server.listen(config.port, () => {
+  console.log(`Backend listening on :${config.port}`);
+  console.log(`  workspace:  ${config.workspaceDir}`);
+  console.log(`  model:      ${config.model ?? "(SDK default)"}`);
+  console.log(`  demoMode:   ${config.demoMode}`);
+  console.log(`  stt:        ${sttConfigured() ? "configured" : "not configured"}`);
 });

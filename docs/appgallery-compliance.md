@@ -96,15 +96,16 @@ användaren *nekar* behörighet.
 
 ## 4. Konsekvens för backend-arkitekturen (redan nu)
 
-Bygg in i relay-backenden medan vi ändå utvecklar:
+Inbyggt i relay-backenden (verifierat end-to-end):
 
-- [ ] **Demo-läge** styrt av env/flagga: isolerat arbetsträd + budgettak-nyckel + rate limiting (R2).
-- [ ] **Filter-hook** i svarsströmmen där ett moderationssteg kan sitta (R1).
-- [ ] **Rapport-endpoint** (`POST /report`) som loggar ett flaggat svar (R1).
-- [ ] **Samtyckes-flagga** på sessions-token: inget prompt-flöde innan samtycke (R4).
-- [ ] **Kontoradering**-endpoint (R4).
+- [x] **Demo-läge** styrt av `DEMO_MODE`: isolerat + seedat arbetsträd, budgettak, rate limiting (R2).
+- [x] **Filter-hook** i svarsströmmen (`src/moderation.ts`) — pluggbart moderationssteg (R1).
+- [x] **Rapport-endpoint** (`POST /report` + WSS `report`) som loggar ett flaggat svar (R1).
+- [x] **Samtyckes-flagga** på sessions-token: inget prompt-/röstflöde innan samtycke (R4).
+- [x] **Kontoradering** (`DELETE /account`) som rensar token + all härledd data (R4).
 
-Dessa är billiga att lägga in nu och dyra att retrofitta senare.
+Kvar till skarp drift: byt ut moderations-stuben mot en riktig klassificerare,
+publicera privacy policy på nåbar URL, och koppla en riktig OAuth-inloggning.
 
 ---
 

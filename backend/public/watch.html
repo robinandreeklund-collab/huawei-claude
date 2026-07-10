@@ -1,0 +1,346 @@
+<!doctype html>
+<html lang="sv">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Claude Code — Watch Ultimate 2 (demo)</title>
+    <style>
+      :root { color-scheme: dark; }
+      * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+      body {
+        margin: 0; min-height: 100vh; background: #05060a; color: #e8eaed;
+        font-family: system-ui, -apple-system, sans-serif;
+        display: flex; flex-direction: column; align-items: center; gap: 1rem;
+        padding: 2rem 1rem;
+      }
+      .caption { color: #6b7280; font-size: .8rem; text-align: center; max-width: 24rem; }
+
+      /* --- Round watch body --- */
+      .watch { position: relative; }
+      .bezel {
+        width: 360px; height: 360px; border-radius: 50%;
+        background: radial-gradient(circle at 50% 30%, #2a2d34, #0c0d10 70%);
+        padding: 14px; box-shadow: 0 20px 60px rgba(0,0,0,.6), inset 0 0 0 2px #3a3f48;
+      }
+      .crown {
+        position: absolute; right: -8px; top: 130px; width: 10px; height: 46px;
+        border-radius: 4px; background: linear-gradient(#4a4f58, #23262c);
+      }
+      .crown.lower { top: 190px; height: 32px; }
+      .screen {
+        width: 100%; height: 100%; border-radius: 50%; overflow: hidden;
+        background: #000; position: relative; display: flex; flex-direction: column;
+      }
+      /* Content is inset from the round edge so nothing is clipped by the curve. */
+      .safe { position: absolute; inset: 40px; display: flex; flex-direction: column; }
+
+      .statusbar { display: flex; align-items: center; justify-content: center; gap: .4rem;
+        font-size: .72rem; color: #9aa3b2; padding-top: .1rem; }
+      .dot { width: .5rem; height: .5rem; border-radius: 50%; background: #6b7280; }
+      .dot.on { background: #7bd88f; }
+      .demoTag { color: #d9a77c; }
+
+      .view { flex: 1; min-height: 0; display: flex; flex-direction: column; }
+      .center { flex: 1; display: flex; flex-direction: column; align-items: center;
+        justify-content: center; text-align: center; gap: .6rem; }
+
+      h2 { font-size: 1rem; margin: 0; }
+      p.small { font-size: .78rem; color: #9aa3b2; margin: 0; line-height: 1.4; }
+      .qr img { width: 150px; height: 150px; border-radius: 10px; background: #fff; padding: 4px; }
+      .usercode { font-family: ui-monospace, monospace; letter-spacing: .12em; font-size: 1rem; }
+
+      button.pill {
+        border: none; border-radius: 999px; padding: .6rem 1.2rem; font-size: .85rem;
+        font-weight: 600; background: #d97757; color: #1a1205; cursor: pointer;
+      }
+      button.pill.ghost { background: #232833; color: #e8eaed; }
+
+      /* Conversation (ArcList-like) */
+      .feed { flex: 1; overflow-y: auto; padding: .2rem .1rem; display: flex;
+        flex-direction: column; gap: .4rem; scrollbar-width: none; }
+      .feed::-webkit-scrollbar { display: none; }
+      .bubble { font-size: .8rem; line-height: 1.35; padding: .45rem .6rem; border-radius: 12px;
+        position: relative; }
+      .me { background: #1c2431; align-self: flex-end; max-width: 90%; }
+      .ai { background: #14181f; }
+      .ai.filtered { background: #2a1618; color: #ff9d95; }
+      .tool { font-family: ui-monospace, monospace; font-size: .68rem; color: #d9a77c;
+        background: #1a140f; padding: .3rem .5rem; border-radius: 9px; }
+      .flag { position: absolute; top: 2px; right: 6px; font-size: .7rem; color: #6b7280;
+        cursor: pointer; }
+
+      /* Mic dock */
+      .dock { display: flex; align-items: center; justify-content: center; gap: .5rem;
+        padding-top: .4rem; }
+      .mic {
+        width: 58px; height: 58px; border-radius: 50%; border: none; cursor: pointer;
+        background: radial-gradient(circle at 50% 35%, #e08a6a, #c15a3a);
+        color: #1a1205; font-size: 1.4rem; display: grid; place-items: center;
+        transition: transform .08s, box-shadow .15s; touch-action: none;
+      }
+      .mic:active, .mic.rec { transform: scale(1.08); box-shadow: 0 0 0 8px rgba(217,119,87,.25); }
+      .mic.rec { background: radial-gradient(circle at 50% 35%, #ff6b6b, #c0392b); }
+      .kbd { width: 40px; height: 40px; border-radius: 50%; border: 1px solid #2a2f38;
+        background: #14181f; color: #9aa3b2; font-size: 1rem; cursor: pointer; }
+      .hint { font-size: .68rem; color: #6b7280; text-align: center; padding-top: .2rem; }
+
+      .typing { display: flex; gap: .3rem; }
+      .typing input { flex: 1; min-width: 0; background: #0f1319; border: 1px solid #2a2f38;
+        color: #e8eaed; border-radius: 999px; padding: .45rem .7rem; font-size: .8rem; }
+      .typing button { border: none; background: #d97757; color: #1a1205; border-radius: 999px;
+        padding: 0 .8rem; font-weight: 700; cursor: pointer; }
+
+      .toolbar { display: flex; gap: 1rem; margin-top: .5rem; }
+      .toolbar button { background: none; border: 1px solid #2a2f38; color: #9aa3b2;
+        border-radius: 999px; padding: .35rem .8rem; font-size: .8rem; cursor: pointer; }
+    </style>
+  </head>
+  <body>
+    <div class="watch">
+      <div class="bezel">
+        <div class="screen">
+          <div class="safe">
+            <div class="statusbar">
+              <span class="dot" id="dot"></span>
+              <span id="clock">--:--</span>
+              <span class="demoTag" id="demoTag"></span>
+            </div>
+            <div class="view" id="view"></div>
+          </div>
+        </div>
+      </div>
+      <div class="crown"></div>
+      <div class="crown lower"></div>
+    </div>
+
+    <div class="toolbar">
+      <button id="ttsBtn">🔊 Uppläsning: på</button>
+      <button id="resetBtn">↺ Starta om</button>
+    </div>
+    <p class="caption">
+      Demo av klock-GUI:t (Watch Ultimate 2, rund skärm) i webbläsaren. Driver den
+      riktiga backenden: QR-parning → samtycke → röst/text → streamat svar.
+    </p>
+
+    <script>
+      const view = document.getElementById("view");
+      const dot = document.getElementById("dot");
+      let meta = { demoMode: false, stt: false };
+      let deviceCode = null, token = null, ws = null, pollTimer = null;
+      let ttsOn = true, recorder = null, chunks = [], recMime = "audio/webm";
+      let pendingAI = ""; // buffer assistant text for a spoken summary
+
+      // clock
+      setInterval(() => {
+        const d = new Date();
+        document.getElementById("clock").textContent =
+          String(d.getHours()).padStart(2, "0") + ":" + String(d.getMinutes()).padStart(2, "0");
+      }, 1000);
+
+      document.getElementById("ttsBtn").addEventListener("click", (e) => {
+        ttsOn = !ttsOn;
+        e.target.textContent = "🔊 Uppläsning: " + (ttsOn ? "på" : "av");
+        if (!ttsOn) speechSynthesis.cancel();
+      });
+      document.getElementById("resetBtn").addEventListener("click", () => location.reload());
+
+      function speak(text) {
+        if (!ttsOn || !text) return;
+        const short = text.split(/(?<=[.!?])\s/)[0].slice(0, 160);
+        const u = new SpeechSynthesisUtterance(short);
+        u.lang = "sv-SE";
+        speechSynthesis.cancel();
+        speechSynthesis.speak(u);
+      }
+
+      // ---- Views ----
+      function showPairing() {
+        view.innerHTML = `
+          <div class="center">
+            <h2>Para ihop klockan</h2>
+            <div class="qr" id="qr"></div>
+            <div class="usercode" id="uc"></div>
+            <p class="small">Skanna med mobilen och godkänn.</p>
+          </div>`;
+      }
+      function showConsent() {
+        view.innerHTML = `
+          <div class="center">
+            <h2>Innan vi börjar</h2>
+            <p class="small">Det du säger skickas till backend och Anthropic (USA)
+              för att köra Claude Code. Inget sparas längre än nödvändigt.</p>
+            <button class="pill" id="consentBtn">Godkänn & fortsätt</button>
+          </div>`;
+        document.getElementById("consentBtn").onclick = () =>
+          ws.send(JSON.stringify({ type: "consent" }));
+      }
+      function showMain() {
+        const micUi = meta.stt
+          ? `<button class="mic" id="mic" title="Håll för att tala">🎤</button>`
+          : `<span class="hint">Röst ej konfigurerad — skriv nedan</span>`;
+        view.innerHTML = `
+          <div class="feed" id="feed"></div>
+          <div class="dock">
+            <button class="kbd" id="kbd" title="Skriv">⌨</button>
+            ${micUi}
+          </div>
+          <div class="hint" id="hint">${meta.stt ? "Håll mic-knappen och tala" : ""}</div>
+          <div class="typing" id="typing" style="display:none">
+            <input id="text" placeholder="Skriv…" />
+            <button id="sendBtn">➤</button>
+          </div>`;
+        wireMain();
+      }
+
+      function bubble(cls, text, opts = {}) {
+        const feed = document.getElementById("feed");
+        if (!feed) return null;
+        const el = document.createElement("div");
+        el.className = "bubble " + cls;
+        el.textContent = text;
+        if (opts.report) {
+          const f = document.createElement("span");
+          f.className = "flag"; f.textContent = "⚑"; f.title = "Rapportera";
+          f.onclick = () => { ws.send(JSON.stringify({ type: "report", text, reason: "user_report" })); f.textContent = "✓"; };
+          el.appendChild(f);
+        }
+        feed.appendChild(el);
+        feed.scrollTop = feed.scrollHeight;
+        return el;
+      }
+
+      function wireMain() {
+        const typing = document.getElementById("typing");
+        document.getElementById("kbd").onclick = () => {
+          typing.style.display = typing.style.display === "none" ? "flex" : "none";
+          if (typing.style.display === "flex") document.getElementById("text").focus();
+        };
+        const sendText = () => {
+          const t = document.getElementById("text").value.trim();
+          if (!t) return;
+          bubble("me", t);
+          ws.send(JSON.stringify({ type: "prompt", text: t }));
+          document.getElementById("text").value = "";
+        };
+        document.getElementById("sendBtn").onclick = sendText;
+        document.getElementById("text").addEventListener("keydown", (e) => { if (e.key === "Enter") sendText(); });
+
+        const mic = document.getElementById("mic");
+        if (mic) {
+          const start = async (e) => {
+            e.preventDefault();
+            try {
+              const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+              recMime = MediaRecorder.isTypeSupported("audio/webm") ? "audio/webm" : "";
+              recorder = new MediaRecorder(stream, recMime ? { mimeType: recMime } : undefined);
+              chunks = [];
+              recorder.ondataavailable = (ev) => ev.data.size && chunks.push(ev.data);
+              recorder.onstop = sendAudio;
+              recorder.start();
+              mic.classList.add("rec");
+              document.getElementById("hint").textContent = "Lyssnar… släpp för att skicka";
+            } catch {
+              document.getElementById("hint").textContent = "Mikrofon nekad";
+            }
+          };
+          const stop = (e) => {
+            e && e.preventDefault();
+            mic.classList.remove("rec");
+            if (recorder && recorder.state !== "inactive") recorder.stop();
+          };
+          mic.addEventListener("pointerdown", start);
+          mic.addEventListener("pointerup", stop);
+          mic.addEventListener("pointerleave", stop);
+        }
+      }
+
+      async function sendAudio() {
+        const blob = new Blob(chunks, { type: recMime || "audio/webm" });
+        const buf = new Uint8Array(await blob.arrayBuffer());
+        let bin = ""; for (const b of buf) bin += String.fromCharCode(b);
+        const b64 = btoa(bin);
+        document.getElementById("hint").textContent = "Transkriberar…";
+        ws.send(JSON.stringify({ type: "audio_start", mime: recMime || "audio/webm" }));
+        ws.send(JSON.stringify({ type: "audio_chunk", data: b64 }));
+        ws.send(JSON.stringify({ type: "audio_end" }));
+      }
+
+      // ---- Flow ----
+      async function boot() {
+        meta = await (await fetch("/meta")).json();
+        document.getElementById("demoTag").textContent = meta.demoMode ? "· DEMO" : "";
+        showPairing();
+        const dc = await (await fetch("/device/code", { method: "POST" })).json();
+        deviceCode = dc.device_code;
+        document.getElementById("qr").innerHTML = '<img src="' + dc.qr_data_url + '">';
+        document.getElementById("uc").textContent = dc.user_code;
+        startPolling(dc.interval);
+      }
+
+      function startPolling(intervalS) {
+        clearInterval(pollTimer);
+        pollTimer = setInterval(async () => {
+          const r = await fetch("/device/token", {
+            method: "POST", headers: { "content-type": "application/json" },
+            body: JSON.stringify({ device_code: deviceCode }),
+          });
+          const data = await r.json();
+          if (data.status === "approved") {
+            clearInterval(pollTimer);
+            token = data.access_token;
+            connect();
+          } else if (data.status === "expired_token") {
+            clearInterval(pollTimer);
+            showPairing();
+          }
+        }, (intervalS || 3) * 1000);
+      }
+
+      function connect() {
+        const proto = location.protocol === "https:" ? "wss" : "ws";
+        ws = new WebSocket(proto + "://" + location.host + "/ws");
+        ws.onopen = () => { dot.classList.add("on"); ws.send(JSON.stringify({ type: "auth", token })); };
+        ws.onclose = () => dot.classList.remove("on");
+        ws.onmessage = (ev) => handle(JSON.parse(ev.data));
+      }
+
+      function handle(m) {
+        switch (m.type) {
+          case "authed":
+            if (m.consented) showMain(); else showConsent();
+            break;
+          case "consented": showMain(); break;
+          case "needs_consent": showConsent(); break;
+          case "transcribing":
+            if (document.getElementById("hint")) document.getElementById("hint").textContent = "Transkriberar…";
+            break;
+          case "transcript":
+            bubble("me", m.text || "(tomt)");
+            if (document.getElementById("hint")) document.getElementById("hint").textContent = "";
+            break;
+          case "assistant":
+            pendingAI += (m.text || "") + " ";
+            bubble("ai" + (m.filtered ? " filtered" : ""), m.text, { report: !m.filtered });
+            break;
+          case "tool_use":
+            bubble("tool", "⚙ " + m.name);
+            break;
+          case "needs_confirmation":
+            bubble("ai filtered", "⚠ Kräver bekräftelse: " + m.command);
+            break;
+          case "turn_done":
+            speak(pendingAI.trim()); pendingAI = "";
+            break;
+          case "stt_unavailable":
+            bubble("ai filtered", "Röst är inte konfigurerad på servern.");
+            break;
+          case "error":
+            bubble("ai filtered", "Fel: " + m.message);
+            break;
+        }
+      }
+
+      boot();
+    </script>
+  </body>
+</html>
