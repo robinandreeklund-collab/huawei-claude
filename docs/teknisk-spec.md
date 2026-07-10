@@ -33,8 +33,9 @@ inte köra det. Lösningen delar upp systemet i tre plan:
 | **Relä/Backend** | Molnserver eller Claude Code-fjärrmiljö | Kör Claude Code-sessionen, STT, håller WSS mot klockan |
 | **Modell** | Anthropic API | Claude |
 
-En valfri fjärde komponent — **telefon-companion** (Android/HarmonyOS-app) — sköter
-inloggning och relär token till klockan via Wear Engine P2P.
+Inloggning sköts via ett **QR/device-flow** (OAuth 2.0 Device Authorization Grant,
+RFC 8628): klockan visar en QR-kod, du loggar in i mobilens webbläsare, och klockan
+hämtar en kortlivad token. **Ingen separat companion-app behövs** — se §6.
 
 ---
 
@@ -53,7 +54,7 @@ Relevanta HarmonyOS-kit för det här projektet:
 | Nätverk | `@kit.NetworkKit` (WebSocket + HTTP) | Kräver `ohos.permission.INTERNET` |
 | Mic-behörighet | Runtime permission | `ohos.permission.MICROPHONE`, dynamisk begäran + `checkAccessToken()` |
 | UI | ArkUI (`ArcList` för runda skärmar) | Anpassat för klockans runda skärm |
-| Telefon↔klocka | Wear Engine (P2P) | För companion-scenariot |
+| QR-generering | ArkUI (rita QR i UI) | För inloggning via device-flow (§6) |
 | Signering/distribution | AppGallery Connect | Nyckel + CSR + certifikat + App ID |
 
 **Konsekvens av STT-begränsningen:** eftersom on-device-transkribering bara stöder
@@ -74,11 +75,12 @@ skickar PCM till backend, som kör en molnbaserad STT (t.ex. Whisper) med svensk
 │  • TTS-uppläsning        │                               │  3. verktygs-status        │
 │  • Sessionsstate         │   ◄── event: tool_use, done ──│                            │
 └─────────────────────────┘                               └────────────┬──────────────┘
-             ▲                                                          │ Anthropic API
-             │ Wear Engine (token)                                      ▼
-┌─────────────────────────┐                                  ┌───────────────────┐
-│  Telefon-companion       │  ── OAuth/inloggning ──►         │   Claude           │
-│  (valfri)                │                                  └───────────────────┘
+             │                                                          │ Anthropic API
+   QR visas  │                                                          ▼
+   på klockan▼                                                ┌───────────────────┐
+┌─────────────────────────┐   ── skanna QR, logga in ──►      │   Claude           │
+│  Din mobil (webbläsare)  │      på backend i mobilen        └───────────────────┘
+│  vilken telefon som helst│      (device-flow, RFC 8628)
 └─────────────────────────┘
 ```
 
@@ -106,11 +108,14 @@ Kärnkomponenten. Ansvarar för:
 4. **Streaming tillbaka** — vidarebefordrar Claudes tokens och verktygs-events till klockan.
 5. **Verktygsgodkännanden** — policy för vad som får köras utan mänskligt ja (se §7).
 
-### 4.3 Telefon-companion (valfri men rekommenderad)
+### 4.3 Inloggning via QR (ingen companion-app)
 
-Löser inloggning elegant: OAuth/inloggning sker på telefonen (stor skärm, säkert),
-och en kortlivad sessions-token skickas till klockan via Wear Engine P2P. Klockan
-lagrar aldrig långlivade Anthropic-credentials.
+Klockan visar en QR-kod. Du skannar med mobilkameran, en webbläsare öppnas och du
+loggar in på backend på mobilens stora skärm. Klockan pollar under tiden backend och
+får till slut en kortlivad sessions-token. Detta är OAuth 2.0 Device Authorization
+Grant (RFC 8628) — samma mönster som smart-TV- och CLI-inloggningar. Klockan lagrar
+aldrig långlivade Anthropic-credentials, och ingen extra app behövs på telefonen.
+Fullständigt flöde i §6.
 
 ---
 
@@ -139,14 +144,28 @@ Tal → AudioCapturer (PCM 16k/16bit/mono)
 **Problem:** man vill inte skriva lösenord/API-nyckel på en klockskärm, och klockan
 ska inte hålla långlivade Anthropic-credentials.
 
-**Föreslaget flöde:**
+**Lösning: QR/device-flow (OAuth 2.0 Device Authorization Grant, RFC 8628).**
+Ingen companion-app — fungerar med vilken telefon som helst (iPhone eller Android),
+eftersom det bara krävs kamera + webbläsare.
 
-1. Användaren loggar in **en gång på telefon-companion** (OAuth mot din backend, inte
-   direkt mot Anthropic).
-2. Backend utfärdar en **kortlivad sessions-token** (t.ex. JWT, minuter–timmar).
-3. Token skickas till klockan via **Wear Engine P2P** (aldrig över öppet nät).
-4. Klockan använder token för att öppna **WSS mot backend** (gärna mTLS ovanpå).
-5. Anthropic-API-nyckeln bor **bara i backend** — klockan ser den aldrig.
+**Flöde:**
+
+1. Klockan ber backend om en device-session → backend svarar med `device_code`,
+   en `verification_uri` och en kort `user_code`.
+2. Klockan visar en **QR-kod** som kodar `verification_uri` (med `user_code` inbakat).
+   Fallback: visa bara `user_code` som text att skriva in på mobilen.
+3. Du **skannar QR:en med mobilkameran** → webbläsaren öppnas → du loggar in på backend
+   (OAuth mot din backend, inte direkt mot Anthropic) → backend binder `device_code`
+   till ditt konto.
+4. Klockan **pollar backend** (`device_code`) tills sessionen är godkänd, och får då en
+   **kortlivad sessions-token** (t.ex. JWT, minuter–timmar).
+5. Klockan använder token för att öppna **WSS mot backend** (gärna mTLS ovanpå).
+6. Anthropic-API-nyckeln bor **bara i backend** — klockan ser den aldrig.
+
+**Detaljer att få rätt:**
+- Respektera device-flowets `interval` och `expires_in` (polla inte för tätt; låt koden
+  löpa ut).
+- QR på rund skärm: visa fullskärm med hög kontrast och tyst zon (quiet zone) runt om.
 
 **Ytterligare härdning:**
 - Rotera/förnya token; kort livslängd.
@@ -169,7 +188,8 @@ klocka är det farligt att auto-godkänna allt.
 | `git push`, radera, nätverksanrop utåt | 🛑 Kräv explicit "ja" (röst eller knapp) |
 
 Godkännande via röst behöver bekräftelsemönster ("Säg *bekräfta* för att pusha").
-Överväg att låta känsliga godkännanden ske i telefon-companion istället.
+Överväg att låta känsliga godkännanden ske via en push-notis/länk till mobilen
+(samma backend som inloggningen) istället för direkt på klockan.
 
 ---
 
@@ -187,9 +207,10 @@ Bygg nerifrån och upp så varje steg går att testa utan nästa.
 - Lägg till STT-steget: skicka en ljudfil → text → Claude Code.
 - *Testas* genom att ladda upp en inspelad ljudfil.
 
-**Steg 3 — Telefon-companion**
-- Inloggning + tokenutfärdande.
-- Wear Engine-koppling mot klockan (kan stubbas först).
+**Steg 3 — Inloggning (QR/device-flow)**
+- Backend-endpoints: skapa device-session, godkänn efter mobil-inloggning, polla token.
+- Mobil inloggningssida (OAuth mot backend) + tokenutfärdande.
+- *Testas* med QR i webbläsare innan klock-UI finns.
 
 **Steg 4 — Klock-app (ArkTS)**
 - Mic-knapp → PCM över WSS.
@@ -222,12 +243,12 @@ Bygg nerifrån och upp så varje steg går att testa utan nästa.
 | Lager | Val | Alternativ |
 |---|---|---|
 | Klock-app | ArkTS + ArkUI (ArcList) | — (enda vägen för native på HarmonyOS) |
-| Telefon↔klocka | Wear Engine P2P | Direkt WSS från klockan (då krävs inloggning på klockan) |
+| Inloggning | QR/device-flow (RFC 8628) | Companion-app (mer att bygga); API-nyckel på klockan (avrådes) |
 | Transport | WebSocket (WSS) över NetworkKit | HTTP long-polling (sämre för streaming) |
 | STT | Whisper (backend) | Molnleverantörs-STT med svenska |
 | Claude Code-drivning | Claude Agent SDK | PTY-wrapping av CLI |
 | TTS | On-device HarmonyOS TTS | Backend-TTS + ljudström |
-| Auth | Kortlivad token från companion | API-nyckel direkt på klockan (avrådes) |
+| Auth-token | Kortlivad JWT från backend | Långlivad token (sämre säkerhet) |
 
 ---
 

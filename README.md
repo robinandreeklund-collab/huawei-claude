@@ -27,8 +27,9 @@ arkitekturbeslut inför en MVP.
   - visar svar       ◄── WSS ──      verktyg, filsystem)   ◄── API ──
   - TTS-uppläsning                   + STT (Whisper e.d.)
 
-[Telefon-companion (valfri men rekommenderad)]
-  - sköter inloggning/OAuth, skickar sessions-token till klockan via Wear Engine
+Inloggning: klockan visar en QR-kod → du skannar med mobilen → loggar in i
+mobilens webbläsare → klockan får en kortlivad token. (OAuth device-flow,
+RFC 8628 — ingen companion-app behövs, funkar med vilken telefon som helst.)
 ```
 
 ## Varför inte allt på klockan?
@@ -37,5 +38,5 @@ arkitekturbeslut inför en MVP.
 |---|---|---|
 | Claude Code-agenten | Backend | Kräver filsystem, git, node, verktyg |
 | Röst → text (svenska) | Backend | HarmonyOS on-device STT stöder bara mandarin |
-| Inloggning/OAuth | Telefon-companion | Liten skärm; säkrare tokenhantering |
+| Inloggning/OAuth | QR på klockan → mobilens webbläsare | Liten skärm; klockan får bara en kortlivad token |
 | UI, mic, uppläsning | Klockan | Det klockan är bra på |
