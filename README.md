@@ -12,6 +12,15 @@ backenden (Docker, demo-läge). Du blir ombedd att ange din **`ANTHROPIC_API_KEY
 under deployen. När den är uppe: öppna `https://<din-app>.onrender.com/watch` i
 mobilen/webbläsaren och testa hela flödet (QR-inloggning → chattar/projekt/kod → röst/text).
 
+> **Varför en API-nyckel och inte min Claude-inloggning?** Det finns två separata
+> inloggningar: **QR-koden** loggar in klockan på *din backend* (det är din
+> inloggning på klockan), medan **backenden ↔ Claude** kräver en API-nyckel.
+> Anthropic tillåter [inte](https://code.claude.com/docs/en/agent-sdk/overview)
+> claude.ai-/prenumerationsinloggning för appar byggda på Claude Agent SDK — API-nyckel
+> är enda sanktionerade vägen. Nyckeln bor bara i backend; klockan ser den aldrig.
+> Hämta en på [console.anthropic.com](https://platform.claude.com/). Kostnaden är per
+> token (~$0.02–0.16 per svar), skild från din Claude Pro/Max.
+
 > Hittar Render inte `render.yaml`? Den ligger på branchen
 > `claude/huawei-watch-app-f0gwye`. Välj den branchen i Render (New ▸ Blueprint ▸
 > välj repo och branch), eller merga branchen till din default-branch först.

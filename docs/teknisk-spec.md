@@ -141,8 +141,20 @@ Tal → AudioCapturer (PCM 16k/16bit/mono)
 
 ## 6. Autentisering och säkerhet
 
-**Problem:** man vill inte skriva lösenord/API-nyckel på en klockskärm, och klockan
-ska inte hålla långlivade Anthropic-credentials.
+**Två separata inloggningar — viktigt att hålla isär:**
+
+| Lager | Vad | Hur |
+|---|---|---|
+| **Klocka ↔ backend** | "Får klockan styra din backend?" | QR/device-flow (nedan) — *din* inloggning på klockan |
+| **Backend ↔ Claude** | Hur backend autentiserar mot Anthropic | **API-nyckel** (obligatoriskt) |
+
+Anthropic **tillåter inte** claude.ai-/prenumerationsinloggning för appar byggda på
+Claude Agent SDK ([källa](https://code.claude.com/docs/en/agent-sdk/overview)) — API-nyckel
+är enda sanktionerade vägen. QR-koden är alltså *inte* en Claude-inloggning; den
+auktoriserar bara klockan mot din backend, som i sin tur håller API-nyckeln.
+
+**Problem (klock-lagret):** man vill inte skriva lösenord/API-nyckel på en klockskärm,
+och klockan ska inte hålla långlivade credentials.
 
 **Lösning: QR/device-flow (OAuth 2.0 Device Authorization Grant, RFC 8628).**
 Ingen companion-app — fungerar med vilken telefon som helst (iPhone eller Android),
