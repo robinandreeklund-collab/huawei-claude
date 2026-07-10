@@ -215,7 +215,7 @@
       let meta = { demoMode: false, stt: false };
       let deviceCode = null, token = null, ws = null, pollTimer = null;
       let ttsOn = true, recorder = null, chunks = [], recMime = "audio/webm";
-      let pendingAI = "", project = "workspace";
+      let pendingAI = "", ctx = "Claude";
       const nav = { mode: "select", focusables: [], idx: 0, scrollEl: null };
 
       setInterval(() => {
@@ -263,7 +263,7 @@
       function back() { const prev = backStack.pop(); if (prev) prev(); }
 
       // --- Screens ---
-      function setProjTag() { document.getElementById("projTag").textContent = project ? "· " + project : ""; }
+      function setProjTag(label) { document.getElementById("projTag").textContent = label ? "· " + label : ""; }
 
       function showPairing() {
         nav.mode = "scroll"; nav.scrollEl = null; backStack = [];
@@ -292,13 +292,13 @@
           <span class="chev">${icon("chev", 18)}</span></div>`;
       }
       function showHome() {
-        nav.mode = "select"; backStack = []; setProjTag();
+        nav.mode = "select"; backStack = []; setProjTag("");
         view.innerHTML = `
           <div class="hdr" style="justify-content:center;gap:.45rem">${burst(22)}<span class="serif ttl" style="flex:0">Claude</span></div>
           <div class="list">
-            ${tileRow("chats", "chat", "Chats", "tidigare samtal")}
-            ${tileRow("projects", "folder", "Projects", "välj repo")}
-            ${tileRow("code", "code", "Code", "bläddra i filer")}
+            ${tileRow("chats", "chat", "Chats", "dina samtal")}
+            ${tileRow("projects", "folder", "Projects", "dina projekt")}
+            ${tileRow("code", "code", "Claude Code", "kod-sessioner")}
           </div>`;
         view.querySelectorAll("[data-go]").forEach((el) => el.addEventListener("click", () => openMode(el.dataset.go)));
         registerFocus();
@@ -314,8 +314,8 @@
       }
       function showList(scope, statusText, items) {
         nav.mode = "select";
-        const titles = { chats: "Chats", projects: "Projects", code: "Code" };
-        const ico = { chats: "chat", projects: "folder", code: "file" }[scope] || "chat";
+        const titles = { chats: "Chats", projects: "Projects", code: "Claude Code" };
+        const ico = { chats: "chat", projects: "folder", code: "code" }[scope] || "chat";
         const newRow = scope === "chats"
           ? `<div class="row" data-focus id="newChat"><span class="ic">${icon("plus", 20)}</span><span class="tx"><div class="t">Ny chatt</div><div class="s">starta nytt samtal</div></span></div>` : "";
         const body = items
@@ -331,26 +331,17 @@
         registerFocus();
       }
       function onPick(scope, id) {
-        if (scope === "projects") ws.send(JSON.stringify({ type: "select_project", id }));
-        else if (scope === "chats") ws.send(JSON.stringify({ type: "open_chat", id }));
-        else if (scope === "code") ws.send(JSON.stringify({ type: "open_file", id }));
-      }
-
-      function showFile(path, content) {
-        nav.mode = "scroll";
-        view.innerHTML = `<div class="hdr"><button class="iconbtn" data-back>${icon("back", 20)}</button><span class="ttl">${esc(path.split("/").pop())}</span></div><pre class="code" id="code"></pre>`;
-        document.getElementById("code").textContent = content;
-        nav.scrollEl = document.getElementById("code");
-        view.querySelector("[data-back]").onclick = () => back();
-        backStack.push(() => openMode("code"));
+        if (scope === "chats") ws.send(JSON.stringify({ type: "open_chat", id }));
+        else if (scope === "projects") ws.send(JSON.stringify({ type: "open_project", id }));
+        else if (scope === "code") ws.send(JSON.stringify({ type: "open_code", id }));
       }
 
       function showChat() {
-        nav.mode = "scroll"; setProjTag();
+        nav.mode = "scroll"; setProjTag(ctx);
         const micUi = meta.stt ? `<button class="mic" id="mic" title="Håll för att tala">${icon("mic", 24)}</button>`
           : `<span class="hint">Röst ej konfigurerad</span>`;
         view.innerHTML = `
-          <div class="hdr"><button class="iconbtn" data-back>${icon("back", 20)}</button><span class="ttl serif">${esc(project)}</span></div>
+          <div class="hdr"><button class="iconbtn" data-back>${icon("back", 20)}</button><span class="ttl serif">${esc(ctx)}</span></div>
           <div class="feed" id="feed"></div>
           <div class="dock"><button class="kbd" id="kbd" title="Skriv">${icon("kbd", 20)}</button>${micUi}</div>
           <div class="hint" id="hint">${meta.stt ? "Håll mic och tala · snurra för att scrolla" : "Skriv nedan"}</div>
@@ -456,13 +447,11 @@
       }
       function handle(m) {
         switch (m.type) {
-          case "authed": project = m.project || "workspace"; if (m.consented) showHome(); else showConsent(); break;
+          case "authed": if (m.consented) showHome(); else showConsent(); break;
           case "consented": showHome(); break;
           case "needs_consent": showConsent(); break;
           case "list_result": showList(m.scope, null, m.items); break;
-          case "project_selected": project = m.title; showHome(); break;
-          case "chat_opened": showChat(); break;
-          case "file": showFile(m.path, m.content); break;
+          case "chat_opened": ctx = m.context || "Claude"; showChat(); break;
           case "transcribing": { const h = document.getElementById("hint"); if (h) h.textContent = "Transkriberar…"; break; }
           case "transcript": bubble("me", m.text || "(tomt)"); { const h = document.getElementById("hint"); if (h) h.textContent = ""; } break;
           case "assistant": pendingAI += (m.text || "") + " "; bubble("ai", m.text, { report: !m.filtered, filtered: m.filtered }); break;

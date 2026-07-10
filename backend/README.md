@@ -70,7 +70,10 @@ svarar servern `stt_unavailable` och klienten faller tillbaka på textinmatning.
 | Variabel | Default | Beskrivning |
 |---|---|---|
 | `PORT` | `8080` | Lyssningsport |
-| `WORKSPACE_DIR` | `/tmp/workspace` | Arbetsträd där Claude Code kör (git/filer) |
+| `WORKSPACE_DIR` | `/tmp/workspace` | Legacy-arbetsträd (test-klienten) |
+| `CHATS_DIR` | `/tmp/chats` | Neutral katalog för fristående Chats |
+| `PROJECTS_DIR` | `/tmp/projects` | Projekt (varje underkatalog = ett projekt) |
+| `CODE_DIR` | `/tmp/code` | Claude Code-repos (varje underkatalog = ett repo) |
 | `CLAUDE_MODEL` | *(SDK-default)* | Ev. modellöverstyrning |
 | `ANTHROPIC_API_KEY` | — | Läses av Agent SDK |
 | `DEMO_MODE` | `false` | Isolerat sandbox-läge (seedat repo, caps) |
@@ -98,18 +101,20 @@ Server → klient: `authed` (`consented`, `demoMode`) · `needs_consent` · `con
 `transcribing` · `transcript` · `stt_unavailable` · `reported` · `result` (kostnad) ·
 `turn_done` · `error`.
 
-Navigation (tre lägen — Chats / Projects / Code):
+Navigation (tre ytor — Chats / Projects / Claude Code):
 ```json
 { "type": "list", "scope": "chats" | "projects" | "code" }
-{ "type": "select_project", "id": "<projektnamn>" }
-{ "type": "open_chat", "id": "<sessionId>" }
 { "type": "new_chat" }
-{ "type": "open_file", "id": "<relativ sökväg>" }
+{ "type": "open_chat",    "id": "<sessionId>" }
+{ "type": "open_project", "id": "<projekt-id>" }
+{ "type": "open_code",    "id": "<repo-namn>" }
 ```
-Svar: `list_result` (`scope`, `items[{id,title,subtitle}]`) · `project_selected` ·
-`chat_opened` · `file` (`path`, `content`). Chattar hämtas via Agent SDK:s
-`listSessions` och återupptas via `resume`; projekt = kataloger under `PROJECTS_DIR`;
-kod = filerna i det aktiva projektet.
+Svar: `list_result` (`scope`, `items[{id,title,subtitle}]`) · `chat_opened`
+(`context`, `kind`). **Chats** = fristående samtal i `CHATS_DIR` (Agent SDK
+`listSessions`, återupptas via `resume`). **Projects** = kataloger under
+`PROJECTS_DIR` med `project.json` (namn + instruktioner → `systemPrompt`).
+**Claude Code** = git-repos under `CODE_DIR`, återupptas i sitt repo med full
+verktygstillgång.
 
 HTTP-compliance: `POST /report` (med token), `DELETE /account` (med token),
 `GET /meta` (`{ demoMode, stt }`).

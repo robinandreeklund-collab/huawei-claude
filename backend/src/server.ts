@@ -16,11 +16,12 @@ import QRCode from "qrcode";
 import { listSessions } from "@anthropic-ai/claude-agent-sdk";
 import { config, sttConfigured } from "./config.js";
 import {
-  listProjects,
-  projectPath,
-  listFiles,
-  readSnippet,
-  seedProjectsIfEmpty,
+  listCodeRepos,
+  codeRepoPath,
+  listAppProjects,
+  appProject,
+  chatsDir,
+  seedIfEmpty,
 } from "./projects.js";
 import {
   createDeviceCode,
@@ -43,13 +44,8 @@ const PUBLIC_DIR = join(dirname(fileURLToPath(import.meta.url)), "..", "public")
 
 await mkdir(config.workspaceDir, { recursive: true });
 await seedWorkspaceIfEmpty(config.workspaceDir);
-if (config.demoMode) await seedProjectsIfEmpty();
-
-/** Default project directory a new connection starts in. */
-async function defaultCwd(): Promise<string> {
-  const projects = await listProjects();
-  return projects[0]?.path ?? config.workspaceDir;
-}
+await mkdir(config.chatsDir, { recursive: true });
+if (config.demoMode) await seedIfEmpty();
 
 // In demo mode the reviewer's actions must never touch a real repo — a fresh,
 // seeded, isolated workspace is used instead.
@@ -76,6 +72,18 @@ async function seedWorkspaceIfEmpty(dir: string): Promise<void> {
   } catch {
     /* best effort */
   }
+}
+
+/** Compact relative time for list subtitles, e.g. "5 min sedan", "2 dgr sedan". */
+function relTime(ms?: number): string {
+  if (!ms) return "";
+  const s = Math.max(0, Math.floor((Date.now() - ms) / 1000));
+  if (s < 60) return "nyss";
+  const m = Math.floor(s / 60);
+  if (m < 60) return `${m} min sedan`;
+  const h = Math.floor(m / 60);
+  if (h < 24) return `${h} h sedan`;
+  return `${Math.floor(h / 24)} dgr sedan`;
 }
 
 // ---------------------------------------------------------------------------
@@ -205,22 +213,24 @@ const wss = new WebSocketServer({ server, path: "/ws" });
 wss.on("connection", (ws: WebSocket) => {
   let session: ClaudeSession | null = null;
   let token = "";
-  let cwd = config.workspaceDir; // active project directory
-  let projectTitle = "workspace";
+  let cwd = config.chatsDir; // active working dir (chats dir, a project, or a repo)
+  let contextLabel = "Claude"; // shown in the chat header/status
+  let systemPrompt: string | undefined; // a Project's instructions, when in a project
   let audio: { mime: string; chunks: Buffer[] } | null = null;
 
   const send = (event: Record<string, unknown>) => {
     if (ws.readyState === ws.OPEN) ws.send(JSON.stringify(event));
   };
 
-  // (Re)create the Claude Code session bound to the current project dir, optionally
-  // resuming a past chat. Called on connect and whenever project/chat changes.
+  // (Re)create the Claude session bound to the current dir, optionally resuming a
+  // past conversation and/or carrying a Project's instructions.
   const rebuildSession = (resume?: string) => {
     session?.close();
     session = new ClaudeSession(send, {
       cwd,
       model: config.model,
       ...(resume ? { resume } : {}),
+      ...(systemPrompt ? { systemPrompt } : {}),
       onCost: (usd) => addSpend(token, usd),
       onFiltered: (reason, text) => addReport(`auto:${reason}`, text),
     });
@@ -261,16 +271,11 @@ wss.on("connection", (ws: WebSocket) => {
     if (msg.type === "auth") {
       if (isValidToken(msg.token as string | undefined)) {
         token = msg.token as string;
-        cwd = await defaultCwd();
-        const projects = await listProjects();
-        projectTitle = projects.find((p) => p.path === cwd)?.title ?? "workspace";
+        cwd = config.chatsDir;
+        contextLabel = "Claude";
+        systemPrompt = undefined;
         rebuildSession();
-        send({
-          type: "authed",
-          consented: hasConsent(token),
-          demoMode: config.demoMode,
-          project: projectTitle,
-        });
+        send({ type: "authed", consented: hasConsent(token), demoMode: config.demoMode });
       } else {
         send({ type: "error", message: "invalid or expired token" });
         ws.close();
@@ -290,32 +295,37 @@ wss.on("connection", (ws: WebSocket) => {
         if (typeof msg.text === "string") runPrompt(msg.text);
         return;
 
-      // --- Navigation: Chats / Projects / Code ----------------------------
+      // --- Navigation: the three Claude surfaces --------------------------
       case "list": {
         const scope = String(msg.scope ?? "");
         try {
-          if (scope === "projects") {
-            const items = (await listProjects()).map((p) => ({
+          if (scope === "chats") {
+            const sessions = await listSessions({ dir: chatsDir(), limit: 30 }).catch(() => []);
+            const items = sessions.map((s) => ({
+              id: s.sessionId,
+              title: s.customTitle || s.summary || s.firstPrompt || "Samtal",
+              subtitle: relTime(s.lastModified),
+            }));
+            send({ type: "list_result", scope, items });
+          } else if (scope === "projects") {
+            const items = (await listAppProjects()).map((p) => ({
               id: p.id,
-              title: p.title,
+              title: p.name,
               subtitle: "projekt",
             }));
             send({ type: "list_result", scope, items });
-          } else if (scope === "chats") {
-            const sessions = await listSessions({ dir: cwd, limit: 30 }).catch(() => []);
-            const items = sessions.map((s) => ({
-              id: s.sessionId,
-              title: s.customTitle || s.summary || s.firstPrompt || "(chatt)",
-              subtitle: s.gitBranch ? `⎇ ${s.gitBranch}` : "chatt",
-            }));
-            send({ type: "list_result", scope, items });
           } else if (scope === "code") {
-            const files = await listFiles(cwd);
-            const items = files.map((f) => ({
-              id: f.id,
-              title: f.title,
-              subtitle: f.dir || "/",
-            }));
+            const repos = await listCodeRepos();
+            const items = await Promise.all(
+              repos.map(async (r) => {
+                const last = await listSessions({ dir: r.path, limit: 1 }).catch(() => []);
+                return {
+                  id: r.id,
+                  title: r.title,
+                  subtitle: last[0] ? relTime(last[0].lastModified) : "inget arbete än",
+                };
+              }),
+            );
             send({ type: "list_result", scope, items });
           } else {
             send({ type: "error", message: "unknown scope" });
@@ -326,30 +336,43 @@ wss.on("connection", (ws: WebSocket) => {
         return;
       }
 
-      case "select_project": {
-        const p = projectPath(String(msg.id ?? ""));
-        if (!p) return send({ type: "error", message: "ogiltigt projekt" });
-        cwd = p;
-        projectTitle = String(msg.id);
+      case "new_chat":
+        cwd = chatsDir();
+        contextLabel = "Nytt samtal";
+        systemPrompt = undefined;
         rebuildSession();
-        send({ type: "project_selected", id: msg.id, title: projectTitle });
+        send({ type: "chat_opened", context: contextLabel, kind: "chat" });
+        return;
+
+      case "open_chat":
+        cwd = chatsDir();
+        contextLabel = "Samtal";
+        systemPrompt = undefined;
+        rebuildSession(String(msg.id ?? ""));
+        send({ type: "chat_opened", context: contextLabel, kind: "chat" });
+        return;
+
+      case "open_project": {
+        const proj = await appProject(String(msg.id ?? ""));
+        if (!proj) return send({ type: "error", message: "ogiltigt projekt" });
+        cwd = proj.path;
+        contextLabel = proj.name;
+        systemPrompt = proj.instructions || undefined;
+        const last = await listSessions({ dir: cwd, limit: 1 }).catch(() => []);
+        rebuildSession(last[0]?.sessionId);
+        send({ type: "chat_opened", context: contextLabel, kind: "project" });
         return;
       }
 
-      case "open_chat":
-        rebuildSession(String(msg.id ?? ""));
-        send({ type: "chat_opened", id: msg.id, project: projectTitle });
-        return;
-
-      case "new_chat":
-        rebuildSession();
-        send({ type: "chat_opened", id: null, project: projectTitle });
-        return;
-
-      case "open_file": {
-        const content = await readSnippet(cwd, String(msg.id ?? ""));
-        if (content === null) return send({ type: "error", message: "kan inte läsa filen" });
-        send({ type: "file", path: msg.id, content });
+      case "open_code": {
+        const repo = codeRepoPath(String(msg.id ?? ""));
+        if (!repo) return send({ type: "error", message: "ogiltigt repo" });
+        cwd = repo;
+        contextLabel = String(msg.id);
+        systemPrompt = undefined;
+        const last = await listSessions({ dir: cwd, limit: 1 }).catch(() => []);
+        rebuildSession(last[0]?.sessionId);
+        send({ type: "chat_opened", context: contextLabel, kind: "code" });
         return;
       }
 

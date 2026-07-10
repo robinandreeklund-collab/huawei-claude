@@ -254,13 +254,21 @@ Bygg nerifrån och upp så varje steg går att testa utan nästa.
 
 ## 11. Navigationsmodell i appen
 
-Tre toppnivålägen, var och en med en lista man navigerar i:
+Tre toppnivålägen som speglar Claudes tre ytor. Alla tre är **app-native** i vår
+backend (se not nedan), var och en med en lista man navigerar i:
 
 | Läge | Innehåll | Åtgärd |
 |---|---|---|
-| **Chats** | Tidigare Claude Code-samtal (Agent SDK `listSessions`) | Öppna → återuppta (`resume`); eller "＋ Ny chatt" |
-| **Projects** | Projekt = repo (kataloger under `PROJECTS_DIR`) | Välj → blir aktivt arbetsträd (cwd) för chattar och kod |
-| **Code** | Filerna i det aktiva projektet | Öppna → visa filinnehåll |
+| **Chats** | Vanliga Claude-samtal, utan repo | Öppna → återuppta; eller "Ny chatt" |
+| **Projects** | Namngivna projekt med egen kontext/instruktioner | Öppna → fortsätt i projektets kontext (systemPrompt) |
+| **Claude Code** | Kod-repos man jobbat i (kod-sessioner) | Öppna → återuppta kod-sessionen i repot (full verktygstillgång) |
+
+**Not — datakälla:** Claude Code-historiken hämtas äkta via Agent SDK:s
+`listSessions()` (grupperat per repo, återupptas med `resume`). Chats och Projects
+som *claude.ai-konto-koncept* har inget publikt tredjeparts-API, så de är app-native
+i den här backenden: Chats = fristående samtal i en neutral katalog, Projects =
+kataloger med `project.json` (namn + instruktioner). De speglar Claudes struktur men
+synkar inte med claude.ai.
 
 **Två inmatningssätt, likvärdiga:**
 - **Touch** — tryck på en rad/ruta för att välja, "‹" för tillbaka.

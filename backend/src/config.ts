@@ -10,9 +10,13 @@ export const config = {
   model: process.env.CLAUDE_MODEL || undefined, // undefined => SDK/CLI default
   workspaceDir: process.env.WORKSPACE_DIR || "/tmp/workspace",
 
-  // Each subdirectory of projectsDir is a "project" (a repo Claude Code works in).
-  // The active project's directory is the cwd for chats and code browsing.
+  // The app mirrors Claude's three surfaces, each app-native in this backend:
+  //   Chats       — plain Claude conversations (no repo)      → chatsDir
+  //   Projects    — named projects with their own context     → projectsDir/<id>
+  //   Claude Code — code sessions in real git repos           → codeDir/<repo>
+  chatsDir: process.env.CHATS_DIR || "/tmp/chats",
   projectsDir: process.env.PROJECTS_DIR || "/tmp/projects",
+  codeDir: process.env.CODE_DIR || "/tmp/code",
 
   // Demo / sandbox mode — used for the instance an AppGallery reviewer tests
   // against. Isolated workspace, seeded example repo, hard budget + rate caps,
