@@ -11,7 +11,8 @@ RUN apt-get update \
 WORKDIR /app
 
 COPY package.json package-lock.json* ./
-RUN npm install --omit=dev=false
+# Install all deps incl. devDependencies (TypeScript) needed for the build step.
+RUN npm ci --include=dev
 
 COPY tsconfig.json ./
 COPY src ./src

@@ -3,6 +3,21 @@
 Projekt för att kunna **logga in på Claude Code och styra det med rösten** från en
 Huawei Watch Ultimate 2 (HarmonyOS NEXT).
 
+## Deploya & testa direkt
+
+[![Deploy to Render](https://render.com/images/deploy-to-render-button.svg)](https://render.com/deploy?repo=https://github.com/robinandreeklund-collab/huawei-claude)
+
+Klicka på knappen → Render läser [`render.yaml`](render.yaml) och sätter upp
+backenden (Docker, demo-läge). Du blir ombedd att ange din **`ANTHROPIC_API_KEY`**
+under deployen. När den är uppe: öppna `https://<din-app>.onrender.com/watch` i
+mobilen/webbläsaren och testa hela flödet (QR-inloggning → chattar/projekt/kod → röst/text).
+
+> Hittar Render inte `render.yaml`? Den ligger på branchen
+> `claude/huawei-watch-app-f0gwye`. Välj den branchen i Render (New ▸ Blueprint ▸
+> välj repo och branch), eller merga branchen till din default-branch först.
+> Gratisplanen somnar efter inaktivitet (kallstart ~30–60 s) — uppgradera till
+> Starter om minnet tar slut.
+
 > **Kärninsikt:** Claude Code kan inte köra *på* klockan. Klockan blir en tunn
 > röst-/textklient mot en backend där Claude Code faktiskt kör — samma mönster som
 > "Claude Code on the web".

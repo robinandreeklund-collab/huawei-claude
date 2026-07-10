@@ -1,0 +1,23 @@
+# Render Blueprint — one-click deploy of the relay backend.
+# Docs: https://render.com/docs/blueprint-spec
+#
+# Uses the Docker runtime (backend/Dockerfile) so git and Node 22 are present for
+# Claude Code's tools. Render injects PORT automatically; the server reads it.
+services:
+  - type: web
+    name: huawei-claude-backend
+    runtime: docker
+    rootDir: backend
+    dockerfilePath: ./Dockerfile
+    plan: free
+    branch: claude/huawei-watch-app-f0gwye
+    healthCheckPath: /healthz
+    envVars:
+      # Sandbox mode: seeded example content, budget + rate caps. Safe for testing.
+      - key: DEMO_MODE
+        value: "true"
+      # Required — Render will prompt you for this during deploy (never committed).
+      - key: ANTHROPIC_API_KEY
+        sync: false
+      # Optional: set these later in the Render dashboard to enable Swedish voice.
+      # STT_API_URL, STT_API_KEY  (any OpenAI-compatible /audio/transcriptions)
