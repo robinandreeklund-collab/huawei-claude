@@ -10,6 +10,10 @@ export const config = {
   model: process.env.CLAUDE_MODEL || undefined, // undefined => SDK/CLI default
   workspaceDir: process.env.WORKSPACE_DIR || "/tmp/workspace",
 
+  // Each subdirectory of projectsDir is a "project" (a repo Claude Code works in).
+  // The active project's directory is the cwd for chats and code browsing.
+  projectsDir: process.env.PROJECTS_DIR || "/tmp/projects",
+
   // Demo / sandbox mode — used for the instance an AppGallery reviewer tests
   // against. Isolated workspace, seeded example repo, hard budget + rate caps,
   // and no access to the operator's real repo or key beyond what env provides.

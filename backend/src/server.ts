@@ -13,7 +13,15 @@ import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
 import { WebSocketServer, type WebSocket } from "ws";
 import QRCode from "qrcode";
+import { listSessions } from "@anthropic-ai/claude-agent-sdk";
 import { config, sttConfigured } from "./config.js";
+import {
+  listProjects,
+  projectPath,
+  listFiles,
+  readSnippet,
+  seedProjectsIfEmpty,
+} from "./projects.js";
 import {
   createDeviceCode,
   approveUserCode,
@@ -35,6 +43,13 @@ const PUBLIC_DIR = join(dirname(fileURLToPath(import.meta.url)), "..", "public")
 
 await mkdir(config.workspaceDir, { recursive: true });
 await seedWorkspaceIfEmpty(config.workspaceDir);
+if (config.demoMode) await seedProjectsIfEmpty();
+
+/** Default project directory a new connection starts in. */
+async function defaultCwd(): Promise<string> {
+  const projects = await listProjects();
+  return projects[0]?.path ?? config.workspaceDir;
+}
 
 // In demo mode the reviewer's actions must never touch a real repo — a fresh,
 // seeded, isolated workspace is used instead.
@@ -190,10 +205,25 @@ const wss = new WebSocketServer({ server, path: "/ws" });
 wss.on("connection", (ws: WebSocket) => {
   let session: ClaudeSession | null = null;
   let token = "";
+  let cwd = config.workspaceDir; // active project directory
+  let projectTitle = "workspace";
   let audio: { mime: string; chunks: Buffer[] } | null = null;
 
   const send = (event: Record<string, unknown>) => {
     if (ws.readyState === ws.OPEN) ws.send(JSON.stringify(event));
+  };
+
+  // (Re)create the Claude Code session bound to the current project dir, optionally
+  // resuming a past chat. Called on connect and whenever project/chat changes.
+  const rebuildSession = (resume?: string) => {
+    session?.close();
+    session = new ClaudeSession(send, {
+      cwd,
+      model: config.model,
+      ...(resume ? { resume } : {}),
+      onCost: (usd) => addSpend(token, usd),
+      onFiltered: (reason, text) => addReport(`auto:${reason}`, text),
+    });
   };
 
   // Common gate for anything that spends model budget: consent, rate, budget.
@@ -231,13 +261,16 @@ wss.on("connection", (ws: WebSocket) => {
     if (msg.type === "auth") {
       if (isValidToken(msg.token as string | undefined)) {
         token = msg.token as string;
-        session = new ClaudeSession(send, {
-          cwd: config.workspaceDir,
-          model: config.model,
-          onCost: (usd) => addSpend(token, usd),
-          onFiltered: (reason, text) => addReport(`auto:${reason}`, text),
+        cwd = await defaultCwd();
+        const projects = await listProjects();
+        projectTitle = projects.find((p) => p.path === cwd)?.title ?? "workspace";
+        rebuildSession();
+        send({
+          type: "authed",
+          consented: hasConsent(token),
+          demoMode: config.demoMode,
+          project: projectTitle,
         });
-        send({ type: "authed", consented: hasConsent(token), demoMode: config.demoMode });
       } else {
         send({ type: "error", message: "invalid or expired token" });
         ws.close();
@@ -256,6 +289,69 @@ wss.on("connection", (ws: WebSocket) => {
       case "prompt":
         if (typeof msg.text === "string") runPrompt(msg.text);
         return;
+
+      // --- Navigation: Chats / Projects / Code ----------------------------
+      case "list": {
+        const scope = String(msg.scope ?? "");
+        try {
+          if (scope === "projects") {
+            const items = (await listProjects()).map((p) => ({
+              id: p.id,
+              title: p.title,
+              subtitle: "projekt",
+            }));
+            send({ type: "list_result", scope, items });
+          } else if (scope === "chats") {
+            const sessions = await listSessions({ dir: cwd, limit: 30 }).catch(() => []);
+            const items = sessions.map((s) => ({
+              id: s.sessionId,
+              title: s.customTitle || s.summary || s.firstPrompt || "(chatt)",
+              subtitle: s.gitBranch ? `⎇ ${s.gitBranch}` : "chatt",
+            }));
+            send({ type: "list_result", scope, items });
+          } else if (scope === "code") {
+            const files = await listFiles(cwd);
+            const items = files.map((f) => ({
+              id: f.id,
+              title: f.title,
+              subtitle: f.dir || "/",
+            }));
+            send({ type: "list_result", scope, items });
+          } else {
+            send({ type: "error", message: "unknown scope" });
+          }
+        } catch (err) {
+          send({ type: "error", message: `list failed: ${String(err).slice(0, 80)}` });
+        }
+        return;
+      }
+
+      case "select_project": {
+        const p = projectPath(String(msg.id ?? ""));
+        if (!p) return send({ type: "error", message: "ogiltigt projekt" });
+        cwd = p;
+        projectTitle = String(msg.id);
+        rebuildSession();
+        send({ type: "project_selected", id: msg.id, title: projectTitle });
+        return;
+      }
+
+      case "open_chat":
+        rebuildSession(String(msg.id ?? ""));
+        send({ type: "chat_opened", id: msg.id, project: projectTitle });
+        return;
+
+      case "new_chat":
+        rebuildSession();
+        send({ type: "chat_opened", id: null, project: projectTitle });
+        return;
+
+      case "open_file": {
+        const content = await readSnippet(cwd, String(msg.id ?? ""));
+        if (content === null) return send({ type: "error", message: "kan inte läsa filen" });
+        send({ type: "file", path: msg.id, content });
+        return;
+      }
 
       case "report":
         addReport(String(msg.reason ?? "user_report"), String(msg.text ?? ""));

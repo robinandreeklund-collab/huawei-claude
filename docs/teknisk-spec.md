@@ -252,6 +252,30 @@ Bygg nerifrån och upp så varje steg går att testa utan nästa.
 
 ---
 
+## 11. Navigationsmodell i appen
+
+Tre toppnivålägen, var och en med en lista man navigerar i:
+
+| Läge | Innehåll | Åtgärd |
+|---|---|---|
+| **Chats** | Tidigare Claude Code-samtal (Agent SDK `listSessions`) | Öppna → återuppta (`resume`); eller "＋ Ny chatt" |
+| **Projects** | Projekt = repo (kataloger under `PROJECTS_DIR`) | Välj → blir aktivt arbetsträd (cwd) för chattar och kod |
+| **Code** | Filerna i det aktiva projektet | Öppna → visa filinnehåll |
+
+**Två inmatningssätt, likvärdiga:**
+- **Touch** — tryck på en rad/ruta för att välja, "‹" för tillbaka.
+- **Digital Crown (övre kronan, upp till höger)** — snurra för att flytta markering
+  (eller scrolla i chatt/fil), tryck för att välja. Nedre knappen = tillbaka.
+
+På HarmonyOS binds detta till ArkUI:s kron-/rotationshändelser (`onDigitalCrown`) och
+knapphändelser. I webb-demon (`backend/public/watch.html`) emuleras kronan med
+mushjul (snurra) + klick på kron-elementet (tryck), plus piltangenter/Enter för
+utveckling. Markerad rad visas med en fokusram.
+
+Skärmflöde: para (QR) → samtycke → **hem** (tre lägen) → lista → chatt/fil.
+
+---
+
 ## Referenser
 
 - [Getting Started with HarmonyOS Wearable App Development](https://developer.huawei.com/consumer/en/multidevice/wearables/get-started/)

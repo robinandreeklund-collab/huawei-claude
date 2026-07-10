@@ -19,6 +19,8 @@ type Emit = (event: Record<string, unknown>) => void;
 interface SessionOpts {
   cwd: string;
   model?: string;
+  /** Resume an existing Claude Code conversation (chat) by session UUID. */
+  resume?: string;
   /** Called with the per-turn cost so the server can enforce a budget cap. */
   onCost?: (usd: number) => void;
   /** Called when moderation filters a message, for the report log. */
@@ -102,6 +104,7 @@ export class ClaudeSession {
       options: {
         cwd: this.opts.cwd,
         ...(this.opts.model ? { model: this.opts.model } : {}),
+        ...(this.opts.resume ? { resume: this.opts.resume } : {}),
         permissionMode: "acceptEdits",
         canUseTool: this.canUseTool,
       },

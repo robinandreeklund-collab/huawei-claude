@@ -98,6 +98,19 @@ Server → klient: `authed` (`consented`, `demoMode`) · `needs_consent` · `con
 `transcribing` · `transcript` · `stt_unavailable` · `reported` · `result` (kostnad) ·
 `turn_done` · `error`.
 
+Navigation (tre lägen — Chats / Projects / Code):
+```json
+{ "type": "list", "scope": "chats" | "projects" | "code" }
+{ "type": "select_project", "id": "<projektnamn>" }
+{ "type": "open_chat", "id": "<sessionId>" }
+{ "type": "new_chat" }
+{ "type": "open_file", "id": "<relativ sökväg>" }
+```
+Svar: `list_result` (`scope`, `items[{id,title,subtitle}]`) · `project_selected` ·
+`chat_opened` · `file` (`path`, `content`). Chattar hämtas via Agent SDK:s
+`listSessions` och återupptas via `resume`; projekt = kataloger under `PROJECTS_DIR`;
+kod = filerna i det aktiva projektet.
+
 HTTP-compliance: `POST /report` (med token), `DELETE /account` (med token),
 `GET /meta` (`{ demoMode, stt }`).
 
