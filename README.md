@@ -22,6 +22,9 @@ webbläsaren — ingen klocka behövs ännu. Nästa steg: fas 2 (röst/STT) och 
 - [`backend/`](backend/) — körbar relay-backend (device-flow-inloggning +
   Claude Code över WSS). Se [`backend/README.md`](backend/README.md) för att köra
   lokalt och deploya till Cloud Run.
+- [`docs/appgallery-compliance.md`](docs/appgallery-compliance.md) — Huaweis
+  granskningsregler, risker och de designbeslut vi binder oss vid för att appen
+  ska kunna publiceras (moderering, demo-läge, integritet).
 
 ## Snabböversikt av arkitekturen
 
