@@ -80,37 +80,40 @@
       .card:active { transform: scale(.98); }
       .empty { position: absolute; inset: 0; display: grid; place-items: center; color: var(--faint); font-size: .82rem; }
 
-      /* --- Chat --- */
+      /* --- Chat (messaging-app style) --- */
+      .cname { color: var(--clay); font-weight: 600; border-bottom: 2px solid var(--clay); padding-bottom: 2px; }
       .feed { position: absolute; inset: 0; overflow-y: auto; scrollbar-width: none;
-        display: flex; flex-direction: column; gap: .5rem; padding: 62px 20px 96px; }
+        display: flex; flex-direction: column; gap: .55rem; padding: 64px 18px 138px; }
       .feed::-webkit-scrollbar { display: none; }
-      .msg { display: flex; gap: .45rem; align-items: flex-start; }
-      .bubble { font-size: .86rem; line-height: 1.42; padding: .55rem .72rem; border-radius: 16px; position: relative;
-        max-width: 100%; word-break: break-word; }
-      .me { align-self: flex-end; background: var(--clay-tint); border: 1px solid rgba(217,119,87,.4);
-        border-bottom-right-radius: 6px; max-width: 86%; }
-      .ai .bubble { background: var(--surface); border-bottom-left-radius: 6px; flex: 1; }
-      .ai.filtered .bubble { background: #3a201c; color: #f0b3a6; }
-      .tool { font-family: ui-monospace, monospace; font-size: .72rem; color: var(--clay); background: var(--surface);
-        padding: .4rem .6rem; border-radius: 11px; display: inline-flex; align-items: center; gap: .4rem; }
-      .flag { position: absolute; top: 4px; right: 7px; color: var(--faint); cursor: pointer; display: inline-grid; }
-      .av { flex: 0 0 auto; margin-top: 3px; }
+      .mrow { display: flex; flex-direction: column; max-width: 100%; }
+      .mrow.out { align-items: flex-end; } .mrow.in { align-items: flex-start; }
+      .bubble { max-width: 86%; padding: .58rem .8rem; border-radius: 21px; font-size: .87rem; line-height: 1.42;
+        word-break: break-word; position: relative; }
+      .bubble.out { background: var(--clay); color: var(--on-clay); border-bottom-right-radius: 7px; font-weight: 500; }
+      .bubble.in { background: var(--surface); color: var(--ink); border-bottom-left-radius: 7px; }
+      .bubble.filtered { background: #3a201c; color: #f0b3a6; }
+      .time { font-size: .6rem; color: var(--faint); margin: .2rem .4rem 0; }
+      .tool { align-self: flex-start; font-family: ui-monospace, monospace; font-size: .72rem; color: var(--clay);
+        background: var(--surface); padding: .4rem .6rem; border-radius: 12px; display: inline-flex; align-items: center; gap: .4rem; }
+      .flag { position: absolute; top: 5px; right: 8px; color: currentColor; opacity: .45; cursor: pointer; display: inline-grid; }
 
-      /* Dock pinned to bottom of the round face */
-      .dock { position: absolute; left: 0; right: 0; bottom: 20px; z-index: 3; display: flex; align-items: center;
-        justify-content: center; gap: .7rem; }
-      .dock::before { content: ""; position: absolute; left: 0; right: 0; bottom: -20px; top: -26px;
-        background: linear-gradient(transparent, var(--bg) 60%); z-index: -1; }
-      .mic { width: 62px; height: 62px; border-radius: 50%; border: none; cursor: pointer;
-        background: radial-gradient(circle at 50% 30%, #e88b68, var(--clay-deep)); color: var(--on-clay);
-        display: grid; place-items: center; transition: transform .08s, box-shadow .15s; touch-action: none;
-        box-shadow: 0 6px 18px rgba(193,95,60,.4); }
-      .mic.rec { transform: scale(1.1); box-shadow: 0 0 0 10px var(--clay-tint); }
-      .kbd { width: 44px; height: 44px; border-radius: 50%; border: 1px solid var(--border); background: var(--surface);
-        color: var(--muted); display: grid; place-items: center; cursor: pointer; }
-      .hint { position: absolute; left: 0; right: 0; bottom: 88px; text-align: center; font-size: .68rem;
-        color: var(--faint); z-index: 3; pointer-events: none; }
-      .typing { position: absolute; left: 18px; right: 18px; bottom: 20px; z-index: 4; display: none; gap: .4rem; }
+      /* Bottom bar: suggested quick replies + dock */
+      .bottombar { position: absolute; left: 0; right: 0; bottom: 0; z-index: 3; display: flex; flex-direction: column;
+        align-items: center; gap: .5rem; padding-bottom: 20px; background: linear-gradient(transparent, var(--bg) 42%); }
+      .status { font-size: .66rem; color: var(--faint); min-height: .85rem; }
+      .quick { display: flex; gap: .4rem; overflow-x: auto; max-width: 100%; padding: 0 22px; scrollbar-width: none; }
+      .quick::-webkit-scrollbar { display: none; }
+      .chip { flex: 0 0 auto; background: var(--surface-2); border: 1px solid var(--border); color: var(--ink);
+        border-radius: 999px; padding: .42rem .85rem; font-size: .78rem; cursor: pointer; white-space: nowrap; }
+      .chip:active { background: var(--clay-tint); }
+      /* Compose bar: two big clay circles — mic (left), keyboard (right) */
+      .dock { display: flex; align-items: center; justify-content: center; gap: 2.6rem; }
+      .cbtn { width: 60px; height: 60px; border-radius: 50%; border: none; cursor: pointer; color: var(--on-clay);
+        background: radial-gradient(circle at 50% 30%, #e88b68, var(--clay-deep)); display: grid; place-items: center;
+        box-shadow: 0 6px 18px rgba(193,95,60,.4); transition: transform .08s, box-shadow .15s; touch-action: none; }
+      .cbtn:active { transform: scale(.96); }
+      .cbtn.rec { transform: scale(1.1); box-shadow: 0 0 0 10px var(--clay-tint); }
+      .typing { position: absolute; left: 16px; right: 16px; bottom: 18px; z-index: 5; display: none; gap: .4rem; }
       .typing input { flex: 1; min-width: 0; background: var(--surface); border: 1px solid var(--border); color: var(--ink);
         border-radius: 999px; padding: .55rem .8rem; font-size: .85rem; }
       .typing input::placeholder { color: var(--faint); }
@@ -199,6 +202,7 @@
         const clock = `<span class="dot ${ws && ws.readyState === 1 ? "on" : ""}"></span><span id="clock">--:--</span>${meta.demoMode ? " · DEMO" : ""}`;
         if (mode === "home") topbar.innerHTML = clock;
         else if (mode === "nav") topbar.innerHTML = `<span class="navttl">${icon("back", 17)}${esc(title)}</span>`;
+        else if (mode === "chat") topbar.innerHTML = `<span class="navttl">${icon("back", 17)}<b class="cname">${esc(title)}</b></span>`;
         else topbar.innerHTML = "";
         const b = topbar.querySelector(".navttl"); if (b) b.onclick = () => back();
       }
@@ -281,14 +285,20 @@
         else if (scope === "code") ws.send(JSON.stringify({ type: "open_code", id }));
       }
 
+      const nowTime = () => { const d = new Date(); return String(d.getHours()).padStart(2, "0") + ":" + String(d.getMinutes()).padStart(2, "0"); };
+      function setStatus(t) { const s = document.getElementById("status"); if (s) s.textContent = t || ""; }
+
       function showChat() {
-        nav.mode = "scroll"; setTop("nav", ctx);
-        const micUi = meta.stt ? `<button class="mic" id="mic">${icon("mic", 26)}</button>`
-          : `<span class="kbd" id="kbdOnly">${icon("kbd", 22)}</span>`;
+        nav.mode = "scroll"; setTop("chat", ctx);
         view.innerHTML = `
           <div class="feed" id="feed"></div>
-          <div class="hint" id="hint">${meta.stt ? "Håll mic och tala" : "Tryck för att skriva"}</div>
-          <div class="dock">${meta.stt ? `<button class="kbd" id="kbd">${icon("kbd", 22)}</button>` : ""}${micUi}</div>
+          <div class="bottombar">
+            <div class="status" id="status"></div>
+            <div class="dock">
+              <button class="cbtn" id="mic">${icon("mic", 26)}</button>
+              <button class="cbtn" id="kbd">${icon("kbd", 24)}</button>
+            </div>
+          </div>
           <div class="typing" id="typing"><input id="text" placeholder="Skriv till Claude…" /><button id="sendBtn">${icon("chev", 18)}</button></div>`;
         nav.scrollEl = document.getElementById("feed");
         backStack = [showHome];
@@ -298,43 +308,57 @@
       function bubble(kind, text, opts = {}) {
         const feed = document.getElementById("feed"); if (!feed) return;
         const wrap = document.createElement("div");
-        if (kind === "me") { wrap.className = "msg"; wrap.style.justifyContent = "flex-end"; wrap.innerHTML = `<div class="bubble me">${esc(text)}</div>`; }
-        else if (kind === "tool") { wrap.className = "msg"; wrap.innerHTML = `<span class="tool">${icon("term", 15)} ${esc(text)}</span>`; }
-        else {
-          wrap.className = "msg ai" + (opts.filtered ? " filtered" : "");
+        if (kind === "me") {
+          wrap.className = "mrow out";
+          wrap.innerHTML = `<div class="bubble out">${esc(text)}</div><div class="time">${nowTime()}</div>`;
+        } else if (kind === "tool") {
+          wrap.className = "mrow in"; wrap.innerHTML = `<span class="tool">${icon("term", 15)} ${esc(text)}</span>`;
+        } else {
+          wrap.className = "mrow in";
           const flag = opts.report ? `<span class="flag">${icon("flag")}</span>` : "";
-          wrap.innerHTML = `<span class="av">${burst(20)}</span><div class="bubble">${esc(text)}${flag}</div>`;
+          wrap.innerHTML = `<div class="bubble in${opts.filtered ? " filtered" : ""}">${esc(text)}${flag}</div><div class="time">${nowTime()}</div>`;
           if (opts.report) wrap.querySelector(".flag").onclick = (ev) => { ws.send(JSON.stringify({ type: "report", text, reason: "user_report" })); ev.currentTarget.textContent = "✓"; };
         }
         feed.appendChild(wrap); feed.scrollTop = feed.scrollHeight;
       }
 
+      // Suggested quick replies, shown after a turn (like the messaging app's "Ok 👋").
+      function suggestions(list) {
+        const feed = document.getElementById("feed"); if (!feed) return;
+        const row = document.createElement("div");
+        row.className = "mrow in"; row.style.width = "100%";
+        row.innerHTML = `<div class="quick">${list.map((s) => `<span class="chip">${esc(s)}</span>`).join("")}</div>`;
+        row.querySelectorAll(".chip").forEach((c, i) => c.onclick = () => { row.remove(); sendPrompt(list[i]); });
+        feed.appendChild(row); feed.scrollTop = feed.scrollHeight;
+      }
+
+      function sendPrompt(text) { bubble("me", text); ws.send(JSON.stringify({ type: "prompt", text })); }
+
       function wireChat() {
         const typing = document.getElementById("typing");
         const openKbd = () => { typing.style.display = typing.style.display === "flex" ? "none" : "flex"; if (typing.style.display === "flex") document.getElementById("text").focus(); };
-        ["kbd", "kbdOnly"].forEach((id) => { const el = document.getElementById(id); if (el) el.onclick = openKbd; });
+        document.getElementById("kbd").onclick = openKbd;
         const sendText = () => { const t = document.getElementById("text").value.trim(); if (!t) return;
-          bubble("me", t); ws.send(JSON.stringify({ type: "prompt", text: t })); document.getElementById("text").value = ""; typing.style.display = "none"; };
+          sendPrompt(t); document.getElementById("text").value = ""; typing.style.display = "none"; };
         document.getElementById("sendBtn").onclick = sendText;
         document.getElementById("text").addEventListener("keydown", (e) => { if (e.key === "Enter") { e.stopPropagation(); sendText(); } });
+
         const mic = document.getElementById("mic");
-        if (mic) {
-          const start = async (e) => { e.preventDefault();
-            try { const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-              recMime = MediaRecorder.isTypeSupported("audio/webm") ? "audio/webm" : "";
-              recorder = new MediaRecorder(stream, recMime ? { mimeType: recMime } : undefined);
-              chunks = []; recorder.ondataavailable = (ev) => ev.data.size && chunks.push(ev.data);
-              recorder.onstop = sendAudio; recorder.start(); mic.classList.add("rec");
-              document.getElementById("hint").textContent = "Lyssnar… släpp"; }
-            catch { document.getElementById("hint").textContent = "Mikrofon nekad"; } };
-          const stop = (e) => { e && e.preventDefault(); mic.classList.remove("rec"); if (recorder && recorder.state !== "inactive") recorder.stop(); };
-          mic.addEventListener("pointerdown", start); mic.addEventListener("pointerup", stop); mic.addEventListener("pointerleave", stop);
-        }
+        if (!meta.stt) { mic.onclick = () => setStatus("Röst ej konfigurerad — använd tangentbordet"); return; }
+        const start = async (e) => { e.preventDefault();
+          try { const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+            recMime = MediaRecorder.isTypeSupported("audio/webm") ? "audio/webm" : "";
+            recorder = new MediaRecorder(stream, recMime ? { mimeType: recMime } : undefined);
+            chunks = []; recorder.ondataavailable = (ev) => ev.data.size && chunks.push(ev.data);
+            recorder.onstop = sendAudio; recorder.start(); mic.classList.add("rec"); setStatus("Lyssnar… släpp"); }
+          catch { setStatus("Mikrofon nekad"); } };
+        const stop = (e) => { e && e.preventDefault(); mic.classList.remove("rec"); if (recorder && recorder.state !== "inactive") recorder.stop(); };
+        mic.addEventListener("pointerdown", start); mic.addEventListener("pointerup", stop); mic.addEventListener("pointerleave", stop);
       }
       async function sendAudio() {
         const blob = new Blob(chunks, { type: recMime || "audio/webm" });
         const buf = new Uint8Array(await blob.arrayBuffer()); let bin = ""; for (const b of buf) bin += String.fromCharCode(b);
-        document.getElementById("hint").textContent = "Transkriberar…";
+        setStatus("Transkriberar…");
         ws.send(JSON.stringify({ type: "audio_start", mime: recMime || "audio/webm" }));
         ws.send(JSON.stringify({ type: "audio_chunk", data: btoa(bin) }));
         ws.send(JSON.stringify({ type: "audio_end" }));
@@ -373,12 +397,13 @@
           case "needs_consent": showConsent(); break;
           case "list_result": showList(m.scope, null, m.items); break;
           case "chat_opened": ctx = m.context || "Claude"; showChat(); break;
-          case "transcribing": { const h = document.getElementById("hint"); if (h) h.textContent = "Transkriberar…"; break; }
-          case "transcript": bubble("me", m.text || "(tomt)"); { const h = document.getElementById("hint"); if (h) h.textContent = ""; } break;
+          case "accepted": setStatus("Claude skriver…"); break;
+          case "transcribing": setStatus("Transkriberar…"); break;
+          case "transcript": bubble("me", m.text || "(tomt)"); setStatus(""); break;
           case "assistant": pendingAI += (m.text || "") + " "; bubble("ai", m.text, { report: !m.filtered, filtered: m.filtered }); break;
           case "tool_use": bubble("tool", m.name); break;
           case "needs_confirmation": bubble("ai", "Kräver bekräftelse: " + m.command, { filtered: true }); break;
-          case "turn_done": speak(pendingAI.trim()); pendingAI = ""; break;
+          case "turn_done": setStatus(""); speak(pendingAI.trim()); pendingAI = ""; suggestions(["Fortsätt", "Förklara", "Sammanfatta kort"]); break;
           case "stt_unavailable": bubble("ai", "Röst är inte konfigurerad på servern.", { filtered: true }); break;
           case "error": bubble("ai", "Fel: " + m.message, { filtered: true }); break;
         }
