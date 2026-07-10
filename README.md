@@ -9,14 +9,19 @@ Huawei Watch Ultimate 2 (HarmonyOS NEXT).
 
 ## Status
 
-Utforskningsfas. Ingen kod ännu — detta repo innehåller den tekniska specen och
-arkitekturbeslut inför en MVP.
+MVP fas 1 + 3 körbar: en relay-backend som driver Claude Code via Claude Agent
+SDK, med QR-inloggning (device-flow) och WebSocket-streaming. Testbar i
+webbläsaren — ingen klocka behövs ännu. Nästa steg: fas 2 (röst/STT) och fas 4
+(ArkTS-klockappen).
 
-## Dokument
+## Dokument & kod
 
 - [`docs/teknisk-spec.md`](docs/teknisk-spec.md) — fullständig teknisk spec:
   arkitektur, komponenter, dataflöden, röst-pipeline, autentisering, risker och
   MVP-plan.
+- [`backend/`](backend/) — körbar relay-backend (device-flow-inloggning +
+  Claude Code över WSS). Se [`backend/README.md`](backend/README.md) för att köra
+  lokalt och deploya till Cloud Run.
 
 ## Snabböversikt av arkitekturen
 

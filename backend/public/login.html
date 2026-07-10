@@ -1,0 +1,89 @@
+<!doctype html>
+<html lang="sv">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Logga in på Claude Code</title>
+    <style>
+      :root { color-scheme: light dark; }
+      body {
+        font-family: system-ui, -apple-system, sans-serif;
+        margin: 0; min-height: 100vh; display: grid; place-items: center;
+        background: #0f1115; color: #e8eaed; padding: 1.5rem;
+      }
+      .card {
+        max-width: 26rem; width: 100%; background: #171a21;
+        border: 1px solid #262b36; border-radius: 16px; padding: 2rem;
+        text-align: center;
+      }
+      h1 { font-size: 1.35rem; margin: 0 0 .5rem; }
+      p { color: #9aa3b2; line-height: 1.5; }
+      .code {
+        font-family: ui-monospace, monospace; font-size: 1.6rem;
+        letter-spacing: .15em; background: #0f1115; border: 1px solid #262b36;
+        border-radius: 10px; padding: .75rem 1rem; margin: 1rem 0; display: inline-block;
+      }
+      input {
+        font-family: ui-monospace, monospace; font-size: 1.2rem; text-align: center;
+        width: 100%; box-sizing: border-box; padding: .75rem; letter-spacing: .1em;
+        background: #0f1115; color: #e8eaed; border: 1px solid #262b36; border-radius: 10px;
+      }
+      button {
+        margin-top: 1.25rem; width: 100%; padding: .85rem; font-size: 1rem; font-weight: 600;
+        background: #d97757; color: #1a1205; border: none; border-radius: 10px; cursor: pointer;
+      }
+      button:disabled { opacity: .5; cursor: default; }
+      .ok { color: #7bd88f; }
+      .err { color: #ff7b72; }
+      small { color: #6b7280; }
+    </style>
+  </head>
+  <body>
+    <div class="card">
+      <h1>Logga in på din klocka</h1>
+      <p>Bekräfta att den här klockan får styra din Claude Code-session.</p>
+      <div id="codeBox"></div>
+      <input id="code" placeholder="XXXX-XXXX" autocomplete="off" autocapitalize="characters" />
+      <button id="approve">Godkänn klockan</button>
+      <p id="status"></p>
+      <small>Prototyp — riktig OAuth-inloggning kommer senare (se specen §6).</small>
+    </div>
+    <script>
+      const params = new URLSearchParams(location.search);
+      const input = document.getElementById("code");
+      const codeBox = document.getElementById("codeBox");
+      const status = document.getElementById("status");
+      const btn = document.getElementById("approve");
+
+      const preset = params.get("code");
+      if (preset) {
+        input.value = preset;
+        codeBox.innerHTML = '<div class="code">' + preset + "</div>";
+      }
+
+      btn.addEventListener("click", async () => {
+        const user_code = input.value.trim().toUpperCase();
+        if (!user_code) return;
+        btn.disabled = true;
+        status.textContent = "Godkänner…";
+        try {
+          const r = await fetch("/login", {
+            method: "POST",
+            headers: { "content-type": "application/json" },
+            body: JSON.stringify({ user_code }),
+          });
+          const data = await r.json();
+          if (data.approved) {
+            status.innerHTML = '<span class="ok">✓ Klockan är godkänd. Du kan lägga bort telefonen.</span>';
+          } else {
+            status.innerHTML = '<span class="err">Koden hittades inte eller har gått ut.</span>';
+            btn.disabled = false;
+          }
+        } catch (e) {
+          status.innerHTML = '<span class="err">Något gick fel: ' + e + "</span>";
+          btn.disabled = false;
+        }
+      });
+    </script>
+  </body>
+</html>
