@@ -16,8 +16,16 @@ services:
       # Sandbox mode: seeded example content, budget + rate caps. Safe for testing.
       - key: DEMO_MODE
         value: "true"
-      # Required — Render will prompt you for this during deploy (never committed).
-      - key: ANTHROPIC_API_KEY
+      # Use YOUR Claude Pro/Max subscription — no per-token API billing.
+      # Generate once on your own machine:
+      #   npm i -g @anthropic-ai/claude-code   (if not installed)
+      #   claude setup-token                   (log in with your Claude account)
+      # Copy the sk-ant-oat01-... token; Render prompts for it here (never committed).
+      # Treat it like a password; it's valid ~1 year. Do NOT also set ANTHROPIC_API_KEY.
+      - key: CLAUDE_CODE_OAUTH_TOKEN
         sync: false
-      # Optional: set these later in the Render dashboard to enable Swedish voice.
-      # STT_API_URL, STT_API_KEY  (any OpenAI-compatible /audio/transcriptions)
+      # Alternative (pay-per-token API billing instead of subscription): remove the
+      # line above and set ANTHROPIC_API_KEY in the Render dashboard instead.
+      #
+      # Optional voice (Swedish STT): set STT_API_URL + STT_API_KEY in the dashboard
+      # (any OpenAI-compatible /audio/transcriptions endpoint).

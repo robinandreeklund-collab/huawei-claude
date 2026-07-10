@@ -146,14 +146,19 @@ Tal → AudioCapturer (PCM 16k/16bit/mono)
 | Lager | Vad | Hur |
 |---|---|---|
 | **Klocka ↔ backend** | "Får klockan styra din backend?" | QR/device-flow (nedan) — *din* inloggning på klockan |
-| **Backend ↔ Claude** | Hur backend autentiserar mot Anthropic | **API-nyckel** (obligatoriskt) |
+| **Backend ↔ Claude** | Hur backend kör din Claude Code | **Din prenumeration** via `CLAUDE_CODE_OAUTH_TOKEN` |
 
-Anthropic **tillåter inte** claude.ai-/prenumerationsinloggning för appar byggda på
-Claude Agent SDK ([källa](https://code.claude.com/docs/en/agent-sdk/overview)) — API-nyckel
-är enda sanktionerade vägen. QR-koden är alltså *inte* en Claude-inloggning; den
-auktoriserar bara klockan mot din backend, som i sin tur håller API-nyckeln.
+För **personligt bruk** (bara du) kör backenden på din **Claude Pro/Max** — generera en
+långlivad token med `claude setup-token` och sätt den som `CLAUDE_CODE_OAUTH_TOKEN`. Ingen
+betalning per token. Detta är det avsedda sättet för individuell användning av Claude Code
+([källa](https://code.claude.com/docs/en/authentication)).
 
-**Problem (klock-lagret):** man vill inte skriva lösenord/API-nyckel på en klockskärm,
+En **API-nyckel** (`ANTHROPIC_API_KEY`, betalning per token) är ett alternativ, och den
+krävs om appen någon gång ska erbjudas till *andra* användare — då tillåter Anthropic
+inte prenumerationsinloggning. QR-koden är alltså *inte* Claude-inloggningen; den
+auktoriserar bara klockan mot din backend, som i sin tur håller Claude-crediten.
+
+**Problem (klock-lagret):** man vill inte skriva lösenord/token på en klockskärm,
 och klockan ska inte hålla långlivade credentials.
 
 **Lösning: QR/device-flow (OAuth 2.0 Device Authorization Grant, RFC 8628).**

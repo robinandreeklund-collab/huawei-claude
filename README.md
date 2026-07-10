@@ -8,18 +8,28 @@ Huawei Watch Ultimate 2 (HarmonyOS NEXT).
 [![Deploy to Render](https://render.com/images/deploy-to-render-button.svg)](https://render.com/deploy?repo=https://github.com/robinandreeklund-collab/huawei-claude)
 
 Klicka på knappen → Render läser [`render.yaml`](render.yaml) och sätter upp
-backenden (Docker, demo-läge). Du blir ombedd att ange din **`ANTHROPIC_API_KEY`**
-under deployen. När den är uppe: öppna `https://<din-app>.onrender.com/watch` i
-mobilen/webbläsaren och testa hela flödet (QR-inloggning → chattar/projekt/kod → röst/text).
+backenden (Docker, demo-läge). När den är uppe: öppna
+`https://<din-app>.onrender.com/watch` i mobilen/webbläsaren och testa hela flödet
+(QR-inloggning → chattar/projekt/kod → röst/text).
 
-> **Varför en API-nyckel och inte min Claude-inloggning?** Det finns två separata
-> inloggningar: **QR-koden** loggar in klockan på *din backend* (det är din
-> inloggning på klockan), medan **backenden ↔ Claude** kräver en API-nyckel.
-> Anthropic tillåter [inte](https://code.claude.com/docs/en/agent-sdk/overview)
-> claude.ai-/prenumerationsinloggning för appar byggda på Claude Agent SDK — API-nyckel
-> är enda sanktionerade vägen. Nyckeln bor bara i backend; klockan ser den aldrig.
-> Hämta en på [console.anthropic.com](https://platform.claude.com/). Kostnaden är per
-> token (~$0.02–0.16 per svar), skild från din Claude Pro/Max.
+### Använd din Claude-prenumeration (ingen extra kostnad)
+
+Backenden kör på **din Claude Pro/Max**, inte betal-per-token-API. Skapa en
+långlivad token en gång på din egen dator:
+
+```bash
+npm i -g @anthropic-ai/claude-code      # om du inte redan har den
+claude setup-token                      # logga in med ditt Claude-konto
+```
+
+Kopiera token (`sk-ant-oat01-…`, giltig ~1 år) och klistra in den som
+**`CLAUDE_CODE_OAUTH_TOKEN`** när Render frågar under deployen. Behandla den som ett
+lösenord. Klockan ser den aldrig — QR-koden ger bara klockan en token till din backend.
+
+> **De två inloggningarna:** QR-koden = *din inloggning på klockan* (klocka ↔ backend).
+> `CLAUDE_CODE_OAUTH_TOKEN` = hur backenden kör *din* Claude Code på *din* prenumeration.
+> Detta är tillåtet för personligt bruk (bara du). En API-nyckel är ett alternativ om
+> du hellre vill betala per token — sätt `ANTHROPIC_API_KEY` istället. Sätt inte båda.
 
 > Hittar Render inte `render.yaml`? Den ligger på branchen
 > `claude/huawei-watch-app-f0gwye`. Välj den branchen i Render (New ▸ Blueprint ▸
