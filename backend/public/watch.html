@@ -3,163 +3,136 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Claude Code — Watch Ultimate 2</title>
+    <title>Claude — Watch Ultimate 2</title>
     <style>
-      /* --- Claude design tokens (warm dark theme) --- */
       :root {
-        --bg: #262624;          /* main surface (Claude dark) */
-        --surface: #1f1e1d;     /* rows / panels */
-        --surface-2: #30302e;   /* raised / focus */
-        --ink: #f5f4ee;         /* primary text (warm off-white) */
-        --muted: #b1ada1;       /* Cloudy */
-        --faint: #83817b;
-        --clay: #d97757;        /* Claude accent */
-        --clay-deep: #c15f3c;   /* Crail */
-        --clay-tint: rgba(217,119,87,.16);
-        --border: #3a3936;
-        --on-clay: #2a1a12;
+        --bg: #262624; --surface: #1f1e1d; --surface-2: #34322f;
+        --ink: #f7f6f1; --muted: #b1ada1; --faint: #86837c;
+        --clay: #d97757; --clay-deep: #c15f3c; --clay-tint: rgba(217,119,87,.18);
+        --border: #3a3936; --on-clay: #2a1a12;
         color-scheme: dark;
       }
       * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
       body {
-        margin: 0; min-height: 100vh; background: #171614; color: var(--ink);
+        margin: 0; min-height: 100vh; background: #141311; color: var(--ink);
         font-family: "Styrene A", ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
-        display: flex; flex-direction: column; align-items: center; gap: 1.1rem; padding: 2rem 1rem;
+        display: flex; flex-direction: column; align-items: center; gap: 1rem; padding: 2rem 1rem;
       }
-      .serif { font-family: Copernicus, "Tiempos Text", Georgia, "Times New Roman", serif; }
-      .caption { color: var(--faint); font-size: .8rem; text-align: center; max-width: 27rem; line-height: 1.5; }
+      .serif { font-family: Copernicus, "Tiempos Text", Georgia, serif; }
+      .caption { color: var(--faint); font-size: .78rem; text-align: center; max-width: 24rem; line-height: 1.5; }
       .caption b { color: var(--muted); font-weight: 600; }
 
-      /* --- Round watch body --- */
       .watch { position: relative; }
       .bezel {
-        width: 360px; height: 360px; border-radius: 50%;
-        background: radial-gradient(circle at 50% 28%, #3a3a37, #141311 72%);
-        padding: 13px; box-shadow: 0 24px 70px rgba(0,0,0,.65), inset 0 0 0 2px #4a4844;
+        width: 372px; height: 372px; border-radius: 50%;
+        background: radial-gradient(circle at 50% 26%, #3d3d39, #131210 74%);
+        padding: 12px; box-shadow: 0 26px 74px rgba(0,0,0,.7), inset 0 0 0 2px #4c4a45;
       }
-      .crown {
-        position: absolute; right: -9px; width: 12px; border-radius: 5px;
-        background: linear-gradient(#5a564f, #2b2926); cursor: pointer;
-        transition: box-shadow .15s;
-      }
-      .crown.upper { top: 116px; height: 52px; }
-      .crown.upper.pulse { box-shadow: 0 0 0 5px var(--clay-tint); }
-      .crown.lower { top: 198px; height: 34px; }
-      .crownlabel { position: absolute; right: 15px; top: 90px; font-size: .58rem; color: var(--faint); }
+      .crown { position: absolute; right: -9px; width: 12px; border-radius: 5px;
+        background: linear-gradient(#5c584f, #2b2926); cursor: pointer; transition: box-shadow .15s; }
+      .crown.upper { top: 120px; height: 54px; } .crown.upper.pulse { box-shadow: 0 0 0 5px var(--clay-tint); }
+      .crown.lower { top: 206px; height: 34px; }
 
-      .screen {
-        width: 100%; height: 100%; border-radius: 50%; overflow: hidden;
-        background: var(--bg); position: relative; display: flex; flex-direction: column;
-        touch-action: none;
-      }
-      .safe { position: absolute; inset: 38px; display: flex; flex-direction: column; }
-
-      .statusbar { display: flex; align-items: center; justify-content: center; gap: .4rem;
-        font-size: .68rem; color: var(--muted); padding-top: .05rem; letter-spacing: .02em; }
-      .dot { width: .42rem; height: .42rem; border-radius: 50%; background: var(--faint); }
+      .screen { width: 100%; height: 100%; border-radius: 50%; overflow: hidden; background: var(--bg);
+        position: relative; touch-action: none; }
+      /* Content fills the whole round face; the circle naturally crops the corners. */
+      .topbar { position: absolute; top: 0; left: 0; right: 0; height: 58px; z-index: 3;
+        display: flex; align-items: center; justify-content: center; gap: .4rem; padding-top: 20px;
+        font-size: .66rem; color: var(--muted); letter-spacing: .04em;
+        background: linear-gradient(var(--bg) 55%, transparent); pointer-events: none; }
+      .navttl { pointer-events: auto; display: inline-flex; align-items: center; gap: .3rem; cursor: pointer;
+        color: var(--ink); font-size: .82rem; }
+      .navttl svg { color: var(--muted); }
+      .dot { width: .4rem; height: .4rem; border-radius: 50%; background: var(--faint); }
       .dot.on { background: #7bbd8a; }
-      .proj { color: var(--clay); max-width: 8rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-      .demoTag { color: var(--muted); }
-
-      .view { flex: 1; min-height: 0; display: flex; flex-direction: column; animation: fade .18s ease; }
-      @keyframes fade { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: none; } }
-
-      .center { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center;
-        text-align: center; gap: .7rem; }
-      h2 { font-size: 1.05rem; margin: 0; font-weight: 500; }
-      p.small { font-size: .76rem; color: var(--muted); margin: 0; line-height: 1.45; max-width: 14rem; }
-
-      /* Logo (Claude sunburst) */
-      .logo { display: flex; flex-direction: column; align-items: center; gap: .35rem; }
-      .logo .word { font-size: 1.15rem; letter-spacing: .01em; }
-      svg { display: block; }
-      .burst line { stroke: var(--clay); stroke-width: 2.1; stroke-linecap: round; }
-
-      .qr img { width: 138px; height: 138px; border-radius: 12px; background: #fff; padding: 5px; }
-      .usercode { font-family: ui-monospace, monospace; letter-spacing: .16em; font-size: 1rem; color: var(--ink); }
-
-      button.pill { border: none; border-radius: 999px; padding: .62rem 1.3rem; font-size: .85rem;
-        font-weight: 600; background: var(--clay); color: var(--on-clay); cursor: pointer; }
-      button.pill:active { background: var(--clay-deep); }
-
-      /* Header with back */
-      .hdr { display: flex; align-items: center; gap: .35rem; font-size: .9rem; font-weight: 500;
-        padding: 0 0 .35rem; color: var(--ink); }
-      .hdr .ttl { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-      .iconbtn { background: none; border: none; color: var(--muted); cursor: pointer; padding: 2px;
-        display: grid; place-items: center; }
+      .iconbtn { background: none; border: none; color: var(--muted); cursor: pointer; padding: 4px; display: grid; place-items: center; }
       .iconbtn:active { color: var(--ink); }
 
-      /* Lists / tiles */
-      .list { flex: 1; overflow-y: auto; display: flex; flex-direction: column; gap: .4rem; padding: .1rem;
-        scrollbar-width: none; }
-      .list::-webkit-scrollbar { display: none; }
-      .row { display: flex; align-items: center; gap: .6rem; background: var(--surface); border-radius: 14px;
-        padding: .6rem .65rem; cursor: pointer; border: 1.5px solid transparent; transition: background .12s, border-color .12s; }
-      .row .ic { color: var(--clay); flex: 0 0 auto; display: grid; place-items: center; }
-      .row .tx { flex: 1; min-width: 0; }
-      .row .t { font-size: .86rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-      .row .s { font-size: .68rem; color: var(--faint); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-      .row .chev { color: var(--faint); flex: 0 0 auto; }
-      .row.focus { border-color: var(--clay); background: var(--surface-2); }
-      .row:active { background: var(--surface-2); }
-      .empty { color: var(--faint); font-size: .78rem; text-align: center; padding-top: 1.2rem; }
+      .view { position: absolute; inset: 0; }
+      @keyframes fade { from { opacity: 0; } to { opacity: 1; } }
+      .view > * { animation: fade .16s ease; }
 
-      /* Chat */
-      .feed { flex: 1; overflow-y: auto; display: flex; flex-direction: column; gap: .45rem; padding: .25rem .05rem;
-        scrollbar-width: none; }
+      .center { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center;
+        justify-content: center; text-align: center; gap: .7rem; padding: 0 44px; }
+      h2 { font-size: 1.15rem; margin: 0; font-weight: 500; }
+      p.small { font-size: .8rem; color: var(--muted); margin: 0; line-height: 1.45; }
+      .burst line { stroke: var(--clay); stroke-width: 2.1; stroke-linecap: round; }
+      .qr img { width: 140px; height: 140px; border-radius: 14px; background: #fff; padding: 5px; }
+      .usercode { font-family: ui-monospace, monospace; letter-spacing: .18em; font-size: 1.05rem; }
+      button.pill { border: none; border-radius: 999px; padding: .7rem 1.5rem; font-size: .9rem; font-weight: 600;
+        background: var(--clay); color: var(--on-clay); cursor: pointer; }
+      button.pill:active { background: var(--clay-deep); }
+
+      /* --- Wheel list (fills the face; centered item is the focus) --- */
+      .wheel { position: absolute; inset: 0; overflow-y: auto; scrollbar-width: none;
+        display: flex; flex-direction: column; gap: 11px; padding: 128px 26px 150px; scroll-snap-type: y proximity; }
+      .wheel::-webkit-scrollbar { display: none; }
+      .wheel.deck { justify-content: center; padding: 70px 26px; gap: 13px; }
+      .card { scroll-snap-align: center; background: var(--surface); border-radius: 22px; cursor: pointer;
+        display: flex; align-items: center; gap: 15px; padding: 17px 19px; min-height: 70px;
+        transition: transform .14s ease, background .14s, box-shadow .14s; }
+      .card .ic { color: var(--clay); flex: 0 0 auto; display: grid; place-items: center; }
+      .card .tx { flex: 1; min-width: 0; }
+      .card .t { font-size: 1.02rem; font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; line-height: 1.2; }
+      .card .s { font-size: .74rem; color: var(--faint); margin-top: 2px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+      .card .chev { color: var(--faint); flex: 0 0 auto; }
+      .card.focus { background: var(--surface-2); box-shadow: inset 0 0 0 2px var(--clay); transform: scale(1.03); }
+      .card:active { transform: scale(.98); }
+      .empty { position: absolute; inset: 0; display: grid; place-items: center; color: var(--faint); font-size: .82rem; }
+
+      /* --- Chat --- */
+      .feed { position: absolute; inset: 0; overflow-y: auto; scrollbar-width: none;
+        display: flex; flex-direction: column; gap: .5rem; padding: 62px 20px 96px; }
       .feed::-webkit-scrollbar { display: none; }
-      .msg { display: flex; gap: .4rem; align-items: flex-start; }
-      .msg .av { flex: 0 0 auto; margin-top: 2px; }
-      .bubble { font-size: .8rem; line-height: 1.4; padding: .5rem .65rem; border-radius: 14px; position: relative;
+      .msg { display: flex; gap: .45rem; align-items: flex-start; }
+      .bubble { font-size: .86rem; line-height: 1.42; padding: .55rem .72rem; border-radius: 16px; position: relative;
         max-width: 100%; word-break: break-word; }
-      .me { align-self: flex-end; background: var(--clay-tint); border: 1px solid rgba(217,119,87,.35);
-        border-bottom-right-radius: 5px; max-width: 88%; }
-      .ai .bubble { background: var(--surface); border-bottom-left-radius: 5px; flex: 1; }
+      .me { align-self: flex-end; background: var(--clay-tint); border: 1px solid rgba(217,119,87,.4);
+        border-bottom-right-radius: 6px; max-width: 86%; }
+      .ai .bubble { background: var(--surface); border-bottom-left-radius: 6px; flex: 1; }
       .ai.filtered .bubble { background: #3a201c; color: #f0b3a6; }
-      .tool { font-family: ui-monospace, monospace; font-size: .68rem; color: var(--clay); background: var(--surface);
-        padding: .35rem .55rem; border-radius: 10px; display: inline-flex; align-items: center; gap: .35rem; }
-      .flag { position: absolute; top: 3px; right: 6px; color: var(--faint); cursor: pointer; display: inline-grid; }
+      .tool { font-family: ui-monospace, monospace; font-size: .72rem; color: var(--clay); background: var(--surface);
+        padding: .4rem .6rem; border-radius: 11px; display: inline-flex; align-items: center; gap: .4rem; }
+      .flag { position: absolute; top: 4px; right: 7px; color: var(--faint); cursor: pointer; display: inline-grid; }
+      .av { flex: 0 0 auto; margin-top: 3px; }
 
-      .dock { display: flex; align-items: center; justify-content: center; gap: .55rem; padding-top: .45rem; }
-      .mic { width: 56px; height: 56px; border-radius: 50%; border: none; cursor: pointer;
-        background: radial-gradient(circle at 50% 32%, #e58a68, var(--clay-deep)); color: var(--on-clay);
-        display: grid; place-items: center; transition: transform .08s, box-shadow .15s; touch-action: none; }
-      .mic.rec { transform: scale(1.09); box-shadow: 0 0 0 9px var(--clay-tint); }
-      .kbd { width: 40px; height: 40px; border-radius: 50%; border: 1px solid var(--border); background: var(--surface);
+      /* Dock pinned to bottom of the round face */
+      .dock { position: absolute; left: 0; right: 0; bottom: 20px; z-index: 3; display: flex; align-items: center;
+        justify-content: center; gap: .7rem; }
+      .dock::before { content: ""; position: absolute; left: 0; right: 0; bottom: -20px; top: -26px;
+        background: linear-gradient(transparent, var(--bg) 60%); z-index: -1; }
+      .mic { width: 62px; height: 62px; border-radius: 50%; border: none; cursor: pointer;
+        background: radial-gradient(circle at 50% 30%, #e88b68, var(--clay-deep)); color: var(--on-clay);
+        display: grid; place-items: center; transition: transform .08s, box-shadow .15s; touch-action: none;
+        box-shadow: 0 6px 18px rgba(193,95,60,.4); }
+      .mic.rec { transform: scale(1.1); box-shadow: 0 0 0 10px var(--clay-tint); }
+      .kbd { width: 44px; height: 44px; border-radius: 50%; border: 1px solid var(--border); background: var(--surface);
         color: var(--muted); display: grid; place-items: center; cursor: pointer; }
-      .hint { font-size: .68rem; color: var(--faint); text-align: center; padding-top: .25rem; min-height: 1rem; }
-      .typing { display: flex; gap: .35rem; }
+      .hint { position: absolute; left: 0; right: 0; bottom: 88px; text-align: center; font-size: .68rem;
+        color: var(--faint); z-index: 3; pointer-events: none; }
+      .typing { position: absolute; left: 18px; right: 18px; bottom: 20px; z-index: 4; display: none; gap: .4rem; }
       .typing input { flex: 1; min-width: 0; background: var(--surface); border: 1px solid var(--border); color: var(--ink);
-        border-radius: 999px; padding: .48rem .75rem; font-size: .8rem; }
+        border-radius: 999px; padding: .55rem .8rem; font-size: .85rem; }
       .typing input::placeholder { color: var(--faint); }
       .typing button { border: none; background: var(--clay); color: var(--on-clay); border-radius: 999px;
-        padding: 0 .85rem; font-weight: 700; cursor: pointer; }
+        padding: 0 .95rem; font-weight: 700; cursor: pointer; }
 
-      pre.code { flex: 1; overflow: auto; margin: 0; font-family: ui-monospace, monospace; font-size: .68rem;
-        line-height: 1.45; color: #d8d4ca; white-space: pre; padding: .3rem; }
+      pre.code { position: absolute; inset: 0; margin: 0; overflow: auto; padding: 62px 22px 40px;
+        font-family: ui-monospace, monospace; font-size: .72rem; line-height: 1.5; color: #d8d4ca; white-space: pre; }
 
       .toolbar { display: flex; gap: .8rem; }
       .toolbar button { background: var(--surface); border: 1px solid var(--border); color: var(--muted);
-        border-radius: 999px; padding: .4rem .9rem; font-size: .8rem; cursor: pointer; }
+        border-radius: 999px; padding: .42rem .95rem; font-size: .8rem; cursor: pointer; }
     </style>
   </head>
   <body>
     <div class="watch">
       <div class="bezel">
         <div class="screen" id="screen">
-          <div class="safe">
-            <div class="statusbar">
-              <span class="dot" id="dot"></span>
-              <span id="clock">--:--</span>
-              <span class="proj" id="projTag"></span>
-              <span class="demoTag" id="demoTag"></span>
-            </div>
-            <div class="view" id="view"></div>
-          </div>
+          <div class="topbar" id="topbar"></div>
+          <div class="view" id="view"></div>
         </div>
       </div>
-      <div class="crownlabel">snurra / tryck</div>
       <div class="crown upper" id="crown" title="Digital Crown — snurra för att navigera, tryck för att välja"></div>
       <div class="crown lower" id="crownBack" title="Nedre knapp — tillbaka"></div>
     </div>
@@ -169,19 +142,18 @@
       <button id="resetBtn">Starta om</button>
     </div>
     <p class="caption">
-      Watch Ultimate 2 · Claude-design. Navigera med <b>touch</b> eller den övre
-      <b>kronan</b> (snurra = flytta / scrolla, tryck = välj; nedre knapp = tillbaka).
-      I webbläsaren emuleras kronan med <b>mushjul</b> + klick på kronan.
+      Watch Ultimate 2 · Claude-design. Navigera med <b>touch</b> eller <b>kronan</b>
+      (snurra = flytta, tryck = välj; nedre knapp = tillbaka). I webbläsaren:
+      <b>mushjul</b> snurrar, klick på kronan trycker.
     </p>
 
     <script>
-      // --- Icon set (Claude-style thin line icons) ---
       const I = {
         chat: 'M4 5.5h16a1 1 0 0 1 1 1v8a1 1 0 0 1-1 1H9l-4 3.5V6.5a1 1 0 0 1 1-1z',
         folder: 'M3 6.5A1.5 1.5 0 0 1 4.5 5h4l2 2h7A1.5 1.5 0 0 1 19 8.5v8A1.5 1.5 0 0 1 17.5 18h-13A1.5 1.5 0 0 1 3 16.5z',
       };
-      function icon(name, size = 22) {
-        const s = `width="${size}" height="${size}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"`;
+      function icon(name, size = 26) {
+        const s = `width="${size}" height="${size}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.85" stroke-linecap="round" stroke-linejoin="round"`;
         switch (name) {
           case "chat": return `<svg ${s}><path d="${I.chat}"/></svg>`;
           case "folder": return `<svg ${s}><path d="${I.folder}"/></svg>`;
@@ -192,141 +164,114 @@
           case "mic": return `<svg ${s}><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5.5 11a6.5 6.5 0 0 0 13 0"/><line x1="12" y1="17.5" x2="12" y2="21"/></svg>`;
           case "kbd": return `<svg ${s}><rect x="3" y="7" width="18" height="10" rx="2"/><line x1="7" y1="11" x2="7" y2="11"/><line x1="11" y1="11" x2="11" y2="11"/><line x1="15" y1="11" x2="15" y2="11"/><line x1="8" y1="14" x2="16" y2="14"/></svg>`;
           case "term": return `<svg ${s}><polyline points="6 8 10 12 6 16"/><line x1="12" y1="16" x2="18" y2="16"/></svg>`;
-          case "file": return `<svg ${s}><path d="M7 3h7l4 4v14H7z"/><polyline points="14 3 14 7 18 7"/></svg>`;
-          case "flag": return `<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 21V5a1 1 0 0 1 1-1h11l-2 4 2 4H6"/></svg>`;
+          case "flag": return `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 21V5a1 1 0 0 1 1-1h11l-2 4 2 4H6"/></svg>`;
         }
         return "";
       }
-      // Claude sunburst mark (radial spokes in clay)
       function burst(size = 44) {
-        const cx = 12, cy = 12, r0 = 3.4, r1 = 8.8, spokes = 12;
-        let lines = "";
-        for (let i = 0; i < spokes; i++) {
-          const a = (i * 2 * Math.PI) / spokes;
-          const x1 = cx + r0 * Math.cos(a), y1 = cy + r0 * Math.sin(a);
-          const x2 = cx + r1 * Math.cos(a), y2 = cy + r1 * Math.sin(a);
-          lines += `<line x1="${x1.toFixed(2)}" y1="${y1.toFixed(2)}" x2="${x2.toFixed(2)}" y2="${y2.toFixed(2)}"/>`;
-        }
-        return `<svg class="burst" width="${size}" height="${size}" viewBox="0 0 24 24">${lines}</svg>`;
+        const cx = 12, cy = 12, r0 = 3.4, r1 = 8.8, n = 12; let l = "";
+        for (let i = 0; i < n; i++) { const a = (i * 2 * Math.PI) / n;
+          l += `<line x1="${(cx + r0 * Math.cos(a)).toFixed(2)}" y1="${(cy + r0 * Math.sin(a)).toFixed(2)}" x2="${(cx + r1 * Math.cos(a)).toFixed(2)}" y2="${(cy + r1 * Math.sin(a)).toFixed(2)}"/>`; }
+        return `<svg class="burst" width="${size}" height="${size}" viewBox="0 0 24 24">${l}</svg>`;
       }
 
       const view = document.getElementById("view");
-      const dot = document.getElementById("dot");
+      const topbar = document.getElementById("topbar");
       let meta = { demoMode: false, stt: false };
       let deviceCode = null, token = null, ws = null, pollTimer = null;
       let ttsOn = true, recorder = null, chunks = [], recMime = "audio/webm";
       let pendingAI = "", ctx = "Claude";
       const nav = { mode: "select", focusables: [], idx: 0, scrollEl: null };
 
-      setInterval(() => {
-        const d = new Date();
-        document.getElementById("clock").textContent =
-          String(d.getHours()).padStart(2, "0") + ":" + String(d.getMinutes()).padStart(2, "0");
-      }, 1000);
+      setInterval(() => { const d = new Date(); const el = document.getElementById("clock");
+        if (el) el.textContent = String(d.getHours()).padStart(2, "0") + ":" + String(d.getMinutes()).padStart(2, "0"); }, 1000);
 
       document.getElementById("ttsBtn").addEventListener("click", (e) => {
-        ttsOn = !ttsOn; e.target.textContent = "Uppläsning: " + (ttsOn ? "på" : "av");
-        if (!ttsOn) speechSynthesis.cancel();
-      });
+        ttsOn = !ttsOn; e.target.textContent = "Uppläsning: " + (ttsOn ? "på" : "av"); if (!ttsOn) speechSynthesis.cancel(); });
       document.getElementById("resetBtn").addEventListener("click", () => location.reload());
 
-      function speak(text) {
-        if (!ttsOn || !text) return;
+      function speak(text) { if (!ttsOn || !text) return;
         const short = text.split(/(?<=[.!?])\s/)[0].slice(0, 160);
-        const u = new SpeechSynthesisUtterance(short); u.lang = "sv-SE";
-        speechSynthesis.cancel(); speechSynthesis.speak(u);
+        const u = new SpeechSynthesisUtterance(short); u.lang = "sv-SE"; speechSynthesis.cancel(); speechSynthesis.speak(u); }
+
+      // --- Top bar ---
+      function setTop(mode, title) {
+        const clock = `<span class="dot ${ws && ws.readyState === 1 ? "on" : ""}"></span><span id="clock">--:--</span>${meta.demoMode ? " · DEMO" : ""}`;
+        if (mode === "home") topbar.innerHTML = clock;
+        else if (mode === "nav") topbar.innerHTML = `<span class="navttl">${icon("back", 17)}${esc(title)}</span>`;
+        else topbar.innerHTML = "";
+        const b = topbar.querySelector(".navttl"); if (b) b.onclick = () => back();
       }
 
       // --- Crown / touch nav ---
-      function registerFocus() { nav.focusables = [...view.querySelectorAll("[data-focus]")]; nav.idx = 0; applyFocus(); }
-      function applyFocus() {
+      function registerFocus() { nav.focusables = [...view.querySelectorAll("[data-focus]")]; nav.idx = 0; applyFocus(true); }
+      function applyFocus(instant) {
         nav.focusables.forEach((el, i) => el.classList.toggle("focus", i === nav.idx));
-        nav.focusables[nav.idx]?.scrollIntoView({ block: "nearest" });
+        nav.focusables[nav.idx]?.scrollIntoView({ block: "center", behavior: instant ? "auto" : "smooth" });
       }
       function rotate(delta) {
-        if (nav.mode === "scroll" && nav.scrollEl) { nav.scrollEl.scrollTop += delta * 40; return; }
+        if (nav.mode === "scroll" && nav.scrollEl) { nav.scrollEl.scrollTop += delta * 44; return; }
         if (!nav.focusables.length) return;
-        nav.idx = (nav.idx + (delta > 0 ? 1 : -1) + nav.focusables.length) % nav.focusables.length;
-        applyFocus();
+        nav.idx = (nav.idx + (delta > 0 ? 1 : -1) + nav.focusables.length) % nav.focusables.length; applyFocus();
       }
       function press() { if (nav.mode === "select") nav.focusables[nav.idx]?.click(); }
       document.getElementById("screen").addEventListener("wheel", (e) => { e.preventDefault(); rotate(e.deltaY); }, { passive: false });
       const crown = document.getElementById("crown");
       crown.addEventListener("click", () => { crown.classList.add("pulse"); setTimeout(() => crown.classList.remove("pulse"), 160); press(); });
       document.getElementById("crownBack").addEventListener("click", () => back());
-      window.addEventListener("keydown", (e) => {
-        if (e.target.tagName === "INPUT") return;
+      window.addEventListener("keydown", (e) => { if (e.target.tagName === "INPUT") return;
         if (e.key === "ArrowDown") rotate(1); else if (e.key === "ArrowUp") rotate(-1);
-        else if (e.key === "Enter") press(); else if (e.key === "Escape" || e.key === "Backspace") back();
-      });
+        else if (e.key === "Enter") press(); else if (e.key === "Escape" || e.key === "Backspace") back(); });
       let backStack = [];
       function back() { const prev = backStack.pop(); if (prev) prev(); }
 
       // --- Screens ---
-      function setProjTag(label) { document.getElementById("projTag").textContent = label ? "· " + label : ""; }
-
       function showPairing() {
-        nav.mode = "scroll"; nav.scrollEl = null; backStack = [];
-        view.innerHTML = `<div class="center">
-          ${burst(46)}
-          <h2 class="serif">Para ihop</h2>
-          <div class="qr" id="qr"></div>
-          <div class="usercode" id="uc"></div>
+        nav.mode = "scroll"; nav.scrollEl = null; backStack = []; setTop("hidden");
+        view.innerHTML = `<div class="center">${burst(48)}<h2 class="serif">Para ihop</h2>
+          <div class="qr" id="qr"></div><div class="usercode" id="uc"></div>
           <p class="small">Skanna med mobilen och godkänn.</p></div>`;
       }
       function showConsent() {
-        nav.mode = "select";
-        view.innerHTML = `<div class="center">
-          ${burst(40)}
-          <h2 class="serif">Innan vi börjar</h2>
-          <p class="small">Det du säger skickas till backend och Anthropic för att köra Claude Code. Inget sparas längre än nödvändigt.</p>
+        nav.mode = "select"; setTop("hidden");
+        view.innerHTML = `<div class="center">${burst(42)}<h2 class="serif">Innan vi börjar</h2>
+          <p class="small">Det du säger skickas till backend och Anthropic för att köra Claude Code.</p>
           <button class="pill" data-focus id="consentBtn">Godkänn &amp; fortsätt</button></div>`;
         document.getElementById("consentBtn").onclick = () => ws.send(JSON.stringify({ type: "consent" }));
         registerFocus();
       }
 
-      function tileRow(go, ico, title, sub) {
-        return `<div class="row" data-focus data-go="${go}">
-          <span class="ic">${icon(ico)}</span>
-          <span class="tx"><div class="t">${title}</div><div class="s">${sub}</div></span>
-          <span class="chev">${icon("chev", 18)}</span></div>`;
+      function card(go, ico, title, sub, big) {
+        return `<div class="card" data-focus ${go.k}="${go.v}">
+          <span class="ic">${icon(ico, big ? 27 : 24)}</span>
+          <span class="tx"><div class="t">${esc(title)}</div>${sub ? `<div class="s">${esc(sub)}</div>` : ""}</span>
+          <span class="chev">${icon("chev", 19)}</span></div>`;
       }
       function showHome() {
-        nav.mode = "select"; backStack = []; setProjTag("");
-        view.innerHTML = `
-          <div class="hdr" style="justify-content:center;gap:.45rem">${burst(22)}<span class="serif ttl" style="flex:0">Claude</span></div>
-          <div class="list">
-            ${tileRow("chats", "chat", "Chats", "dina samtal")}
-            ${tileRow("projects", "folder", "Projects", "dina projekt")}
-            ${tileRow("code", "code", "Claude Code", "kod-sessioner")}
-          </div>`;
+        nav.mode = "select"; backStack = []; setTop("home");
+        view.innerHTML = `<div class="wheel deck">
+          ${card({ k: "data-go", v: "chats" }, "chat", "Chats", "dina samtal", true)}
+          ${card({ k: "data-go", v: "projects" }, "folder", "Projects", "dina projekt", true)}
+          ${card({ k: "data-go", v: "code" }, "code", "Claude Code", "kod-sessioner", true)}
+        </div>`;
         view.querySelectorAll("[data-go]").forEach((el) => el.addEventListener("click", () => openMode(el.dataset.go)));
         registerFocus();
       }
-
       function openMode(scope) { backStack.push(showHome); showList(scope, "…"); ws.send(JSON.stringify({ type: "list", scope })); }
 
-      function listRow(ico, id, title, sub) {
-        return `<div class="row" data-focus data-id="${encodeURIComponent(id)}">
-          <span class="ic">${icon(ico, 20)}</span>
-          <span class="tx"><div class="t">${esc(title)}</div><div class="s">${esc(sub || "")}</div></span>
-          <span class="chev">${icon("chev", 18)}</span></div>`;
-      }
       function showList(scope, statusText, items) {
         nav.mode = "select";
         const titles = { chats: "Chats", projects: "Projects", code: "Claude Code" };
         const ico = { chats: "chat", projects: "folder", code: "code" }[scope] || "chat";
-        const newRow = scope === "chats"
-          ? `<div class="row" data-focus id="newChat"><span class="ic">${icon("plus", 20)}</span><span class="tx"><div class="t">Ny chatt</div><div class="s">starta nytt samtal</div></span></div>` : "";
-        const body = items
-          ? (items.length || scope === "chats"
-              ? newRow + items.map((it) => listRow(ico, it.id, it.title, it.subtitle)).join("")
-              : `<div class="empty">Inget här än</div>`)
-          : `<div class="empty">${esc(statusText || "…")}</div>`;
-        view.innerHTML = `<div class="hdr"><button class="iconbtn" data-back>${icon("back", 20)}</button><span class="ttl">${titles[scope] || scope}</span></div><div class="list" id="list">${body}</div>`;
-        view.querySelector("[data-back]").onclick = () => back();
-        const nc = document.getElementById("newChat");
-        if (nc) nc.onclick = () => ws.send(JSON.stringify({ type: "new_chat" }));
+        setTop("nav", titles[scope] || scope);
+        if (!items) { view.innerHTML = `<div class="empty">${esc(statusText || "…")}</div>`; return; }
+        let rows = scope === "chats"
+          ? `<div class="card" data-focus id="newChat"><span class="ic">${icon("plus", 24)}</span><span class="tx"><div class="t">Ny chatt</div></span></div>` : "";
+        rows += items.length
+          ? items.map((it) => card({ k: "data-id", v: encodeURIComponent(it.id) }, ico, it.title, it.subtitle)).join("")
+          : (scope === "chats" ? "" : `<div class="empty">Inget här än</div>`);
+        view.innerHTML = `<div class="wheel">${rows}</div>`;
+        const nc = document.getElementById("newChat"); if (nc) nc.onclick = () => ws.send(JSON.stringify({ type: "new_chat" }));
         view.querySelectorAll("[data-id]").forEach((el) => el.addEventListener("click", () => onPick(scope, decodeURIComponent(el.dataset.id))));
         registerFocus();
       }
@@ -337,17 +282,15 @@
       }
 
       function showChat() {
-        nav.mode = "scroll"; setProjTag(ctx);
-        const micUi = meta.stt ? `<button class="mic" id="mic" title="Håll för att tala">${icon("mic", 24)}</button>`
-          : `<span class="hint">Röst ej konfigurerad</span>`;
+        nav.mode = "scroll"; setTop("nav", ctx);
+        const micUi = meta.stt ? `<button class="mic" id="mic">${icon("mic", 26)}</button>`
+          : `<span class="kbd" id="kbdOnly">${icon("kbd", 22)}</span>`;
         view.innerHTML = `
-          <div class="hdr"><button class="iconbtn" data-back>${icon("back", 20)}</button><span class="ttl serif">${esc(ctx)}</span></div>
           <div class="feed" id="feed"></div>
-          <div class="dock"><button class="kbd" id="kbd" title="Skriv">${icon("kbd", 20)}</button>${micUi}</div>
-          <div class="hint" id="hint">${meta.stt ? "Håll mic och tala · snurra för att scrolla" : "Skriv nedan"}</div>
-          <div class="typing" id="typing" style="display:none"><input id="text" placeholder="Skriv till Claude…" /><button id="sendBtn">${icon("chev", 18)}</button></div>`;
+          <div class="hint" id="hint">${meta.stt ? "Håll mic och tala" : "Tryck för att skriva"}</div>
+          <div class="dock">${meta.stt ? `<button class="kbd" id="kbd">${icon("kbd", 22)}</button>` : ""}${micUi}</div>
+          <div class="typing" id="typing"><input id="text" placeholder="Skriv till Claude…" /><button id="sendBtn">${icon("chev", 18)}</button></div>`;
         nav.scrollEl = document.getElementById("feed");
-        view.querySelector("[data-back]").onclick = () => showHome();
         backStack = [showHome];
         wireChat();
       }
@@ -355,73 +298,52 @@
       function bubble(kind, text, opts = {}) {
         const feed = document.getElementById("feed"); if (!feed) return;
         const wrap = document.createElement("div");
-        if (kind === "me") {
-          wrap.className = "msg"; wrap.style.justifyContent = "flex-end";
-          wrap.innerHTML = `<div class="bubble me">${esc(text)}</div>`;
-        } else if (kind === "tool") {
-          wrap.className = "msg"; wrap.innerHTML = `<span class="tool">${icon("term", 14)} ${esc(text)}</span>`;
-        } else {
-          const filtered = opts.filtered ? " filtered" : "";
-          wrap.className = "msg ai" + filtered;
-          const flag = opts.report ? `<span class="flag" title="Rapportera">${icon("flag")}</span>` : "";
-          wrap.innerHTML = `<span class="av">${burst(18)}</span><div class="bubble">${esc(text)}${flag}</div>`;
-          if (opts.report) wrap.querySelector(".flag").onclick = (ev) => {
-            ws.send(JSON.stringify({ type: "report", text, reason: "user_report" })); ev.currentTarget.textContent = "✓";
-          };
+        if (kind === "me") { wrap.className = "msg"; wrap.style.justifyContent = "flex-end"; wrap.innerHTML = `<div class="bubble me">${esc(text)}</div>`; }
+        else if (kind === "tool") { wrap.className = "msg"; wrap.innerHTML = `<span class="tool">${icon("term", 15)} ${esc(text)}</span>`; }
+        else {
+          wrap.className = "msg ai" + (opts.filtered ? " filtered" : "");
+          const flag = opts.report ? `<span class="flag">${icon("flag")}</span>` : "";
+          wrap.innerHTML = `<span class="av">${burst(20)}</span><div class="bubble">${esc(text)}${flag}</div>`;
+          if (opts.report) wrap.querySelector(".flag").onclick = (ev) => { ws.send(JSON.stringify({ type: "report", text, reason: "user_report" })); ev.currentTarget.textContent = "✓"; };
         }
         feed.appendChild(wrap); feed.scrollTop = feed.scrollHeight;
       }
 
       function wireChat() {
         const typing = document.getElementById("typing");
-        document.getElementById("kbd").onclick = () => {
-          typing.style.display = typing.style.display === "none" ? "flex" : "none";
-          if (typing.style.display === "flex") document.getElementById("text").focus();
-        };
-        const sendText = () => {
-          const t = document.getElementById("text").value.trim(); if (!t) return;
-          bubble("me", t); ws.send(JSON.stringify({ type: "prompt", text: t }));
-          document.getElementById("text").value = "";
-        };
+        const openKbd = () => { typing.style.display = typing.style.display === "flex" ? "none" : "flex"; if (typing.style.display === "flex") document.getElementById("text").focus(); };
+        ["kbd", "kbdOnly"].forEach((id) => { const el = document.getElementById(id); if (el) el.onclick = openKbd; });
+        const sendText = () => { const t = document.getElementById("text").value.trim(); if (!t) return;
+          bubble("me", t); ws.send(JSON.stringify({ type: "prompt", text: t })); document.getElementById("text").value = ""; typing.style.display = "none"; };
         document.getElementById("sendBtn").onclick = sendText;
         document.getElementById("text").addEventListener("keydown", (e) => { if (e.key === "Enter") { e.stopPropagation(); sendText(); } });
-
         const mic = document.getElementById("mic");
         if (mic) {
-          const start = async (e) => {
-            e.preventDefault();
-            try {
-              const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+          const start = async (e) => { e.preventDefault();
+            try { const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
               recMime = MediaRecorder.isTypeSupported("audio/webm") ? "audio/webm" : "";
               recorder = new MediaRecorder(stream, recMime ? { mimeType: recMime } : undefined);
               chunks = []; recorder.ondataavailable = (ev) => ev.data.size && chunks.push(ev.data);
               recorder.onstop = sendAudio; recorder.start(); mic.classList.add("rec");
-              document.getElementById("hint").textContent = "Lyssnar… släpp för att skicka";
-            } catch { document.getElementById("hint").textContent = "Mikrofon nekad"; }
-          };
+              document.getElementById("hint").textContent = "Lyssnar… släpp"; }
+            catch { document.getElementById("hint").textContent = "Mikrofon nekad"; } };
           const stop = (e) => { e && e.preventDefault(); mic.classList.remove("rec"); if (recorder && recorder.state !== "inactive") recorder.stop(); };
-          mic.addEventListener("pointerdown", start);
-          mic.addEventListener("pointerup", stop);
-          mic.addEventListener("pointerleave", stop);
+          mic.addEventListener("pointerdown", start); mic.addEventListener("pointerup", stop); mic.addEventListener("pointerleave", stop);
         }
       }
-
       async function sendAudio() {
         const blob = new Blob(chunks, { type: recMime || "audio/webm" });
-        const buf = new Uint8Array(await blob.arrayBuffer());
-        let bin = ""; for (const b of buf) bin += String.fromCharCode(b);
+        const buf = new Uint8Array(await blob.arrayBuffer()); let bin = ""; for (const b of buf) bin += String.fromCharCode(b);
         document.getElementById("hint").textContent = "Transkriberar…";
         ws.send(JSON.stringify({ type: "audio_start", mime: recMime || "audio/webm" }));
         ws.send(JSON.stringify({ type: "audio_chunk", data: btoa(bin) }));
         ws.send(JSON.stringify({ type: "audio_end" }));
       }
-
       const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
 
       // --- Flow ---
       async function boot() {
         meta = await (await fetch("/meta")).json();
-        document.getElementById("demoTag").textContent = meta.demoMode ? "· DEMO" : "";
         showPairing();
         const dc = await (await fetch("/device/code", { method: "POST" })).json();
         deviceCode = dc.device_code;
@@ -441,8 +363,7 @@
       function connect() {
         const proto = location.protocol === "https:" ? "wss" : "ws";
         ws = new WebSocket(proto + "://" + location.host + "/ws");
-        ws.onopen = () => { dot.classList.add("on"); ws.send(JSON.stringify({ type: "auth", token })); };
-        ws.onclose = () => dot.classList.remove("on");
+        ws.onopen = () => ws.send(JSON.stringify({ type: "auth", token }));
         ws.onmessage = (ev) => handle(JSON.parse(ev.data));
       }
       function handle(m) {
@@ -462,7 +383,6 @@
           case "error": bubble("ai", "Fel: " + m.message, { filtered: true }); break;
         }
       }
-
       boot();
     </script>
   </body>
