@@ -400,7 +400,7 @@
       const topbar = document.getElementById("topbar");
       let meta = { demoMode: false, stt: false };
       let deviceCode = null, token = null, ws = null, pollTimer = null;
-      let claudeConnected = false, connectTimer = null;
+      let claudeConnected = false, connectTimer = null, booted = false;
       let ttsOn = true, recorder = null, chunks = [], recMime = "audio/webm";
       let pendingAI = "", ctx = "Claude", curKind = "chat", planOn = false, notifOn = true, lang = "";
       const nav = { mode: "select", focusables: [], idx: 0, scrollEl: null };
@@ -446,11 +446,13 @@
       function applyDepth() {
         if (!scroller || !scroller.classList.contains("wheel") || scroller.classList.contains("deck")) return;
         const sr = screenEl.getBoundingClientRect(), cy = sr.top + sr.height / 2, R = sr.height / 2;
-        scroller.querySelectorAll(".card").forEach((c) => {
-          const r = c.getBoundingClientRect(), d = Math.min(1, Math.abs(r.top + r.height / 2 - cy) / R);
-          c.style.transform = `scale(${(1 - d * 0.15).toFixed(3)})`;
-          c.style.opacity = (1 - d * 0.32).toFixed(3); // keep off-centre rows readable
-
+        // Read phase: gather all measurements first, then write — no read/write thrash.
+        const cards = scroller.querySelectorAll(".card");
+        const d = [];
+        cards.forEach((c) => { const r = c.getBoundingClientRect(); d.push(Math.min(1, Math.abs(r.top + r.height / 2 - cy) / R)); });
+        cards.forEach((c, i) => {
+          c.style.transform = `scale(${(1 - d[i] * 0.15).toFixed(3)})`;
+          c.style.opacity = (1 - d[i] * 0.32).toFixed(3); // keep off-centre rows readable
         });
       }
       function updateThumb() {
@@ -711,21 +713,28 @@
       // `assistant` event reconciles it (adds the report flag, or swaps to the
       // filter notice). streamQueue keeps finished stream bubbles awaiting that.
       let curStream = null; const streamQueue = [];
+      // Scroll-to-bottom throttled to one frame (avoids a forced reflow per token).
+      let scrollPending = false;
+      function scrollFeedSoon() {
+        if (scrollPending) return; scrollPending = true;
+        requestAnimationFrame(() => { scrollPending = false; const feed = document.getElementById("feed"); if (feed) feed.scrollTop = feed.scrollHeight; });
+      }
       function startStream() {
         if (curStream) endStream(); // a new text block began before the last one closed
         hideTyping(); const feed = document.getElementById("feed"); if (!feed) return;
         const row = document.createElement("div"); row.className = "mrow in";
         const b = document.createElement("div"); b.className = "bubble in";
+        const tn = document.createTextNode(""); b.appendChild(tn); // O(1)-appendable text node
         const t = document.createElement("div"); t.className = "time"; t.textContent = nowTime();
         row.appendChild(b); row.appendChild(t); feed.appendChild(row);
-        feed.scrollTop = feed.scrollHeight;
-        curStream = { row, bubble: b, filtered: false };
+        scrollFeedSoon();
+        curStream = { row, bubble: b, textNode: tn, filtered: false };
       }
       function appendStream(text) {
         if (!curStream) startStream();
         if (curStream.filtered) return;
-        curStream.bubble.textContent += text;
-        const feed = document.getElementById("feed"); if (feed) feed.scrollTop = feed.scrollHeight;
+        curStream.textNode.appendData(text); // O(1) per token, no full-string rewrite
+        scrollFeedSoon();
       }
       function filterStream() { if (!curStream) startStream(); curStream.filtered = true; curStream.bubble.classList.add("filtered"); curStream.bubble.textContent = "…"; }
       function endStream() { if (curStream) { streamQueue.push(curStream); curStream = null; } }
@@ -990,11 +999,14 @@
         mic.addEventListener("pointerdown", start); mic.addEventListener("pointerup", stop); mic.addEventListener("pointerleave", stop);
       }
       async function sendAudio() {
-        const blob = new Blob(chunks, { type: recMime || "audio/webm" });
-        const buf = new Uint8Array(await blob.arrayBuffer()); let bin = ""; for (const b of buf) bin += String.fromCharCode(b);
+        const mime = recMime || "audio/webm";
+        const blob = new Blob(chunks, { type: mime });
+        // Native base64 via a data: URL — avoids the O(n²) char-by-char loop.
+        const dataUrl = await new Promise((res, rej) => { const fr = new FileReader(); fr.onload = () => res(fr.result); fr.onerror = rej; fr.readAsDataURL(blob); });
+        const b64 = String(dataUrl).split(",", 2)[1] || "";
         setStatus("Transcribing…");
-        wsend({ type: "audio_start", mime: recMime || "audio/webm" });
-        wsend({ type: "audio_chunk", data: btoa(bin) });
+        wsend({ type: "audio_start", mime });
+        wsend({ type: "audio_chunk", data: b64 });
         wsend({ type: "audio_end" });
       }
       const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
@@ -1055,7 +1067,12 @@
       }
       function handle(m) {
         switch (m.type) {
-          case "authed": planOn = Boolean(m.planMode); claudeConnected = Boolean(m.claude); if (!m.consented) showConsent(); else afterConsent(); break;
+          case "authed":
+            planOn = Boolean(m.planMode); claudeConnected = Boolean(m.claude); setConn(true);
+            // Only navigate on the FIRST auth. A transient reconnect must NOT throw
+            // the user out of their current chat/list/settings screen.
+            if (!booted) { booted = true; if (!m.consented) showConsent(); else afterConsent(); }
+            break;
           case "consented": afterConsent(); break;
           case "needs_consent": showConsent(); break;
           case "list_result": dir = "none"; showList(m.scope, null, m.items); break;
@@ -1100,6 +1117,8 @@
           case "stt_unavailable": hideTyping(); setRunning(false); bubble("ai", "Voice is not configured on the server.", { filtered: true }); break;
           case "error":
             hideTyping(); setRunning(false);
+            // Device session token expired → stop reconnecting and re-pair.
+            if (/invalid or expired token/i.test(String(m.message))) { token = null; if (reconnectTimer) { clearTimeout(reconnectTimer); reconnectTimer = null; } booted = false; showPairing(); renewPairing(); break; }
             if (/not connected/i.test(String(m.message))) { claudeConnected = false; showConnectClaude(); break; }
             bubble("ai", "Error: " + m.message, { filtered: true });
             if (/oauth|401|unauthor|invalid api key|credit balance|authentication|expired/i.test(String(m.message))) { showNotif("Reconnect Claude", "Open /connect on your phone"); }

@@ -287,7 +287,9 @@ export class ClaudeSession {
     } else if (ev.type === "content_block_delta") {
       if (ev.delta?.type === "text_delta" && typeof ev.delta.text === "string") {
         if (this.streamBlocked) return;
-        this.streamBuf += ev.delta.text;
+        // Keep only a bounded tail so moderation stays O(n) over the whole answer
+        // (patterns are short; 256 chars of overlap is far more than enough).
+        this.streamBuf = (this.streamBuf + ev.delta.text).slice(-256);
         if (moderate(this.streamBuf).flagged) {
           this.streamBlocked = true;
           this.emit({ type: "stream_filter" });

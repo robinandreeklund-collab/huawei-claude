@@ -535,7 +535,9 @@ wss.on("connection", (ws: WebSocket) => {
 
       // --- Account & settings ---------------------------------------------
       case "account": {
-        const account = controlOk() ? await us.claude?.accountInfo() : null;
+        // Served from the cached probe (shared per credential) so opening Settings
+        // doesn't spawn a Claude CLI just to read the account.
+        const account = controlOk() ? await probeAccount() : null;
         send({ type: "account_result", account: account ?? null });
         return;
       }
