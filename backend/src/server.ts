@@ -210,7 +210,7 @@ const server = createServer(async (req, res) => {
       return json(res, 403, { error: "wrong admin secret" });
     }
     if (!validToken(String(token ?? ""))) {
-      return json(res, 400, { error: "invalid token (expected sk-ant-oat… or sk-ant-api…)" });
+      return json(res, 400, { error: "invalid token — expected an sk-ant-… token from `claude setup-token`" });
     }
     await setCred(String(token));
     return json(res, 200, { ...credStatus(), adminRequired: Boolean(config.adminSecret) });

@@ -25,13 +25,28 @@ export async function loadCred(): Promise<void> {
   }
 }
 
-/** Accepts a Claude Code subscription token (sk-ant-oat…) or an API key (sk-ant-api…). */
+// Clean up a pasted token: strip zero-width/BOM characters and surrounding
+// quotes/brackets/whitespace that a phone clipboard sometimes adds.
+export function sanitizeToken(token: string): string {
+  return String(token)
+    .replace(/[\u200B-\u200D\uFEFF\u00A0]/g, "") // zero-width + BOM + nbsp
+    .trim()
+    .replace(/^["'`<(\[]+|["'`>)\]]+$/g, "")
+    .trim();
+}
+
+/**
+ * Accepts any Claude credential — a subscription token (sk-ant-oat…), an API key
+ * (sk-ant-api…), or any other well-formed sk-ant-… token. We only sanity-check the
+ * shape; the real check is whether it actually authenticates (see probeAccount).
+ */
 export function validToken(token: string): boolean {
-  return /^sk-ant-(oat|api)\w*-/.test(token.trim()) && token.trim().length > 24;
+  const t = sanitizeToken(token);
+  return t.startsWith("sk-ant-") && t.length >= 24 && !/\s/.test(t);
 }
 
 export async function setCred(token: string): Promise<void> {
-  current = token.trim();
+  current = sanitizeToken(token);
   cachedAccount = null; // re-verify against the new credential on next probe
   await writeFile(config.credFile, JSON.stringify({ token: current }), { mode: 0o600 }).catch(() => {});
 }
