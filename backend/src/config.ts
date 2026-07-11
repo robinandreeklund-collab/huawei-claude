@@ -81,6 +81,17 @@ export const config = {
   // Enable SKILL.md skills (e.g. pdf, docx). "all" | comma-list | "" (off).
   skills: process.env.SKILLS || "",
 
+  // Login / settings policy (passed to the SDK's `settings` layer).
+  //  - forceSubscription: lock the login method to Claude Pro/Max ("claudeai")
+  //    so the backend never silently falls back to Console/API billing.
+  //  - denyRules: declarative permission deny rules, e.g. "Bash(git push:*)".
+  //  - coAuthored: include the Co-authored-by trailer in commits Claude makes.
+  //  - language: default language for Claude's replies (per-user overridable).
+  forceSubscription: bool(process.env.FORCE_SUBSCRIPTION, true),
+  denyRules: list(process.env.DENY_RULES),
+  coAuthored: bool(process.env.CO_AUTHORED, true),
+  language: process.env.CLAUDE_LANGUAGE || "",
+
   // "Connect Claude" page: paste your `claude setup-token` credential once instead
   // of setting it as an env var. Optional ADMIN_SECRET gates who may set it.
   credFile: process.env.CRED_FILE || under("claude-cred.json", "/tmp/claude-cred.json"),
@@ -141,3 +152,17 @@ export const pushConfigured = (): boolean =>
   Boolean(config.push.appId && config.push.clientId && config.push.clientSecret);
 
 export const mcpConfigured = (): boolean => Object.keys(mcpServers()).length > 0;
+
+/**
+ * SDK `settings` object built from config, with an optional per-user language.
+ * Empty keys are omitted so we never override a lower-precedence source with a blank.
+ */
+export function buildSettings(language?: string): Record<string, unknown> {
+  const s: Record<string, unknown> = {};
+  if (config.forceSubscription) s.forceLoginMethod = "claudeai";
+  if (config.denyRules.length) s.permissions = { deny: config.denyRules };
+  s.includeCoAuthoredBy = config.coAuthored;
+  const lang = language || config.language;
+  if (lang) s.language = lang;
+  return s;
+}

@@ -9,9 +9,11 @@
 // token has been connected.
 
 import { readFile, writeFile } from "node:fs/promises";
+import { query } from "@anthropic-ai/claude-agent-sdk";
 import { config } from "./config.js";
 
 let current: string | null = null;
+let cachedAccount: unknown = null;
 
 export async function loadCred(): Promise<void> {
   try {
@@ -30,7 +32,45 @@ export function validToken(token: string): boolean {
 
 export async function setCred(token: string): Promise<void> {
   current = token.trim();
+  cachedAccount = null; // re-verify against the new credential on next probe
   await writeFile(config.credFile, JSON.stringify({ token: current }), { mode: 0o600 }).catch(() => {});
+}
+
+// Never-yielding prompt: keeps the query's input stream open so the CLI stays up
+// long enough to answer the accountInfo() control request, without sending a turn.
+async function* idlePrompt(): AsyncGenerator<never> {
+  await new Promise<void>(() => {}); // never resolves
+}
+
+/**
+ * Verify the connected credential by asking Claude who it's authenticated as.
+ * Returns { email, subscriptionType, apiProvider, … } or null if it can't verify.
+ * Result is cached until the credential changes.
+ */
+export async function probeAccount(force = false): Promise<unknown> {
+  if (cachedAccount && !force) return cachedAccount;
+  if (!isConnected()) return null;
+  let q: { accountInfo?: () => Promise<unknown>; close?: () => void } | null = null;
+  try {
+    q = query({ prompt: idlePrompt(), options: { env: spawnEnv(), permissionMode: "plan" } }) as unknown as {
+      accountInfo?: () => Promise<unknown>;
+      close?: () => void;
+    };
+    const info = await Promise.race([
+      q?.accountInfo?.() ?? Promise.resolve(null),
+      new Promise((_, reject) => setTimeout(() => reject(new Error("timeout")), 12000)),
+    ]);
+    cachedAccount = info ?? null;
+    return cachedAccount;
+  } catch {
+    return null;
+  } finally {
+    try {
+      q?.close?.();
+    } catch {
+      /* ignore */
+    }
+  }
 }
 
 export type CredKind = "subscription" | "apikey" | null;

@@ -214,6 +214,31 @@
       .ctxmenu .ci.danger { color: var(--err); } .ctxmenu .ci.danger .ic { color: var(--err); }
       .ctxmenu .ci .ic { color: var(--clay); display: grid; place-items: center; }
 
+      /* --- Settings screen --- */
+      .setwheel { padding: 70px 22px 120px; gap: 11px; }
+      .acct { display: flex; align-items: center; gap: 13px; background: linear-gradient(135deg, var(--surface-2), var(--surface));
+        border: 1px solid var(--border); border-radius: 20px; padding: 15px 17px; }
+      .acct .ic { width: 40px; height: 40px; border-radius: 50%; background: var(--clay-tint); color: var(--clay);
+        display: grid; place-items: center; flex: 0 0 auto; }
+      .acct .tx { min-width: 0; } .acct .t { font-size: .96rem; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+      .acct .s { font-size: .74rem; color: var(--faint); margin-top: 1px; }
+      .acct .s.plan { color: var(--clay); font-weight: 600; }
+      .setrow { display: flex; align-items: center; gap: 12px; background: var(--surface); border: 1px solid var(--border);
+        border-radius: 18px; padding: 13px 16px; cursor: pointer; transition: background .14s, transform .1s; }
+      .setrow:active { transform: scale(.98); background: var(--surface-2); }
+      .setrow .ic { color: var(--clay); display: grid; place-items: center; flex: 0 0 auto; }
+      .setrow .tx { flex: 1; min-width: 0; } .setrow .t { font-size: .92rem; } .setrow .s { font-size: .72rem; color: var(--faint); margin-top: 1px; }
+      .switch { width: 42px; height: 25px; border-radius: 999px; background: var(--surface-2); border: 1px solid var(--border);
+        flex: 0 0 auto; position: relative; transition: background .2s; }
+      .switch::after { content: ""; position: absolute; top: 2px; left: 2px; width: 19px; height: 19px; border-radius: 50%;
+        background: var(--muted); transition: transform .22s var(--spring), background .2s; }
+      .switch.on { background: var(--clay); } .switch.on::after { transform: translateX(17px); background: var(--on-clay); }
+      .seglabel { font-size: .72rem; color: var(--muted); margin: .5rem 0 -.2rem 4px; }
+      .seg { display: flex; gap: 5px; background: var(--surface); border: 1px solid var(--border); border-radius: 15px; padding: 4px; }
+      .seg button { flex: 1; border: none; background: none; color: var(--muted); border-radius: 11px; padding: .5rem 0;
+        font-size: .8rem; cursor: pointer; transition: background .16s, color .16s; }
+      .seg button.on { background: var(--clay); color: var(--on-clay); font-weight: 600; }
+
       .ripple { position: absolute; z-index: 20; width: 12px; height: 12px; border-radius: 50%;
         background: var(--clay); pointer-events: none; transform: translate(-50%, -50%);
         animation: rip .5s var(--ease) forwards; }
@@ -331,6 +356,10 @@
           case "edit": return `<svg ${s}><path d="M4 20h4L18.5 9.5a2 2 0 0 0-2.8-2.8L5 17.2z"/><line x1="14" y1="8" x2="17" y2="11"/></svg>`;
           case "trash": return `<svg ${s}><polyline points="4 7 20 7"/><path d="M6 7l1 12a2 2 0 0 0 2 2h6a2 2 0 0 0 2-2l1-12"/><path d="M9.5 7V5a1.5 1.5 0 0 1 1.5-1.5h2A1.5 1.5 0 0 1 14.5 5v2"/></svg>`;
           case "branch": return `<svg ${s}><circle cx="7" cy="6" r="2.2"/><circle cx="7" cy="18" r="2.2"/><circle cx="17" cy="9" r="2.2"/><path d="M7 8v8M7 12h5a3 3 0 0 0 3-3"/></svg>`;
+          case "gear": return `<svg ${s}><circle cx="12" cy="12" r="3"/><path d="M12 3v2.5M12 18.5V21M4.2 7l2.2 1.3M17.6 15.7 19.8 17M4.2 17l2.2-1.3M17.6 8.3 19.8 7"/></svg>`;
+          case "user": return `<svg ${s}><circle cx="12" cy="8" r="3.4"/><path d="M5.5 20a6.5 6.5 0 0 1 13 0"/></svg>`;
+          case "globe": return `<svg ${s}><circle cx="12" cy="12" r="8.5"/><path d="M3.5 12h17M12 3.5c2.5 2.4 2.5 14.6 0 17M12 3.5c-2.5 2.4-2.5 14.6 0 17"/></svg>`;
+          case "sound": return `<svg ${s}><path d="M5 9v6h3l4 3.5V5.5L8 9z"/><path d="M15.5 9.5a3.5 3.5 0 0 1 0 5"/></svg>`;
         }
         return "";
       }
@@ -353,7 +382,7 @@
       let meta = { demoMode: false, stt: false };
       let deviceCode = null, token = null, ws = null, pollTimer = null;
       let ttsOn = true, recorder = null, chunks = [], recMime = "audio/webm";
-      let pendingAI = "", ctx = "Claude", curKind = "chat", planOn = false;
+      let pendingAI = "", ctx = "Claude", curKind = "chat", planOn = false, notifOn = true, lang = "";
       const nav = { mode: "select", focusables: [], idx: 0, scrollEl: null };
 
       setInterval(() => { const d = new Date(); const el = document.getElementById("clock");
@@ -370,12 +399,13 @@
       // --- Top bar ---
       function setTop(mode, title) {
         const clock = `<span class="dot ${ws && ws.readyState === 1 ? "on" : ""}"></span><span id="clock">--:--</span>${meta.demoMode ? " · DEMO" : ""}`;
-        if (mode === "home") topbar.innerHTML = clock;
+        if (mode === "home") topbar.innerHTML = clock + `<button class="topmenu" id="homeGear">${icon("gear", 20)}</button>`;
         else if (mode === "nav") topbar.innerHTML = `<span class="navttl">${icon("back", 17)}${esc(title)}</span>`;
         else if (mode === "chat") topbar.innerHTML = `<span class="navttl">${icon("back", 17)}<b class="cname">${esc(title)}</b></span><button class="topmenu" id="chatMenu">${icon("menu", 20)}</button>`;
         else topbar.innerHTML = "";
         const b = topbar.querySelector(".navttl"); if (b) b.onclick = () => back();
         const mn = document.getElementById("chatMenu"); if (mn) mn.onclick = () => showMenu();
+        const g = document.getElementById("homeGear"); if (g) g.onclick = () => { dir = "fwd"; showSettings(); };
       }
 
       // --- Motion engine: depth-wheel, momentum scroll, transitions, thumb ---
@@ -504,6 +534,42 @@
         registerFocus(); afterRender();
       }
       function openMode(scope) { dir = "fwd"; backStack.push(showHome); showList(scope, "…"); ws.send(JSON.stringify({ type: "list", scope })); }
+
+      // --- Settings & account screen ---
+      const sw = (on) => `<span class="switch ${on ? "on" : ""}"></span>`;
+      function showSettings() {
+        nav.mode = "scroll"; setTop("nav", "Settings"); backStack = [showHome];
+        view.innerHTML = `<div class="wheel setwheel">
+          <div class="acct"><span class="ic">${icon("user", 22)}</span><div class="tx"><div class="t" id="acctName">Checking account…</div><div class="s plan" id="acctPlan">verifying credential</div></div></div>
+          <div class="seglabel">Claude replies in</div>
+          <div class="seg" id="segLang"><button data-l="">Auto</button><button data-l="english">EN</button><button data-l="svenska">SV</button></div>
+          <div class="setrow" data-a="model"><span class="ic">${icon("cpu", 20)}</span><div class="tx"><div class="t">Model</div><div class="s">which model runs</div></div><span class="chev">${icon("chev", 18)}</span></div>
+          <div class="setrow" data-a="plan"><span class="ic">${icon("plan", 20)}</span><div class="tx"><div class="t">Plan mode</div><div class="s">review before acting</div></div>${sw(planOn)}</div>
+          <div class="setrow" data-a="notif"><span class="ic">${icon("bell", 20)}</span><div class="tx"><div class="t">Notifications</div><div class="s">buzz when Claude alerts</div></div>${sw(notifOn)}</div>
+          <div class="setrow" data-a="tts"><span class="ic">${icon("sound", 20)}</span><div class="tx"><div class="t">Read aloud</div><div class="s">speak replies</div></div>${sw(ttsOn)}</div>
+        </div>`;
+        const seg = document.getElementById("segLang");
+        const paint = () => seg.querySelectorAll("button").forEach((x) => x.classList.toggle("on", x.dataset.l === lang));
+        paint();
+        seg.querySelectorAll("button").forEach((x) => x.onclick = () => { lang = x.dataset.l; paint(); ws.send(JSON.stringify({ type: "set_language", lang })); toast("Language: " + (lang || "auto")); });
+        view.querySelectorAll(".setrow").forEach((r) => r.onclick = () => {
+          const a = r.dataset.a, tog = r.querySelector(".switch");
+          if (a === "model") ws.send(JSON.stringify({ type: "models" }));
+          else if (a === "plan") { planOn = !planOn; tog.classList.toggle("on", planOn); applyPlanClass(); ws.send(JSON.stringify({ type: "plan_mode", on: planOn })); }
+          else if (a === "notif") { notifOn = !notifOn; tog.classList.toggle("on", notifOn); ws.send(JSON.stringify({ type: "set_notifications", on: notifOn })); }
+          else if (a === "tts") { ttsOn = !ttsOn; tog.classList.toggle("on", ttsOn); document.getElementById("ttsBtn").textContent = "Read aloud: " + (ttsOn ? "on" : "off"); if (!ttsOn) speechSynthesis.cancel(); }
+        });
+        ws.send(JSON.stringify({ type: "account" }));
+        ws.send(JSON.stringify({ type: "settings_get" }));
+        afterRender();
+      }
+      function fillAccount(a) {
+        const n = document.getElementById("acctName"), p = document.getElementById("acctPlan"); if (!n || !p) return;
+        if (!a) { n.textContent = "Not verified"; p.textContent = "reconnect on /connect"; p.classList.remove("plan"); return; }
+        n.textContent = a.email || "Connected";
+        const plan = a.subscriptionType || (a.apiProvider === "firstParty" ? "Claude subscription" : a.apiProvider) || "connected";
+        p.textContent = String(plan).replace(/_/g, " "); p.classList.add("plan");
+      }
 
       function showList(scope, statusText, items) {
         nav.mode = "select";
@@ -922,8 +988,21 @@
           // Session management results:
           case "session_renamed": toast("Renamed"); ws.send(JSON.stringify({ type: "list", scope: "chats" })); break;
           case "session_deleted": toast("Deleted"); ws.send(JSON.stringify({ type: "list", scope: "chats" })); break;
+          // Account & settings:
+          case "account_result": fillAccount(m.account); break;
+          case "settings_result": {
+            lang = m.language || ""; notifOn = m.notifications !== false; planOn = Boolean(m.planMode);
+            const seg = document.getElementById("segLang"); if (seg) seg.querySelectorAll("button").forEach((x) => x.classList.toggle("on", x.dataset.l === lang));
+            document.querySelectorAll(".setrow").forEach((r) => { if (r.dataset.a === "plan") r.querySelector(".switch")?.classList.toggle("on", planOn); if (r.dataset.a === "notif") r.querySelector(".switch")?.classList.toggle("on", notifOn); });
+            break;
+          }
+          case "language_set": break;
+          case "notifications_set": break;
           case "stt_unavailable": hideTyping(); setRunning(false); bubble("ai", "Voice is not configured on the server.", { filtered: true }); break;
-          case "error": hideTyping(); setRunning(false); bubble("ai", "Error: " + m.message, { filtered: true }); break;
+          case "error":
+            hideTyping(); setRunning(false); bubble("ai", "Error: " + m.message, { filtered: true });
+            if (/oauth|401|unauthor|invalid api key|credit balance|authentication|expired/i.test(String(m.message))) { showNotif("Reconnect Claude", "Open /connect on your phone"); }
+            break;
         }
       }
       boot();

@@ -4,9 +4,8 @@ Genomgång av `@anthropic-ai/claude-agent-sdk` (v0.3.x) mot vår watch-relay, f�
 se vad vi kan lägga till och optimera. **Ingen kod här** — bara analys, värde och
 prioritering. Källa: SDK:ns egna typdefinitioner (`sdk.d.ts`) + runtime-API:t (`Query`).
 
-> **Status:** nivå 1–3 nedan är **implementerade**, plus en **nivå 4** (se längst
-> ner) där Claude får verktyg att agera på klockan (vibrera/notis/timer/hälsa/plats),
-> sessionshantering, modellväljare, plan-gränser och robust återanslutning. Se
+> **Status:** nivå 1–3 nedan är **implementerade**, plus **nivå 4** (Claude agerar
+> på klockan) och **nivå 5** (konto, inloggning & inställningar) — se längst ner. Se
 > `backend/README.md` → "SDK-funktioner". MCP, sandbox och persistent disk är
 > inkopplade men avstängda tills man sätter respektive env-var/creds.
 
@@ -230,3 +229,30 @@ Claude-planens 5h/7d-fönster visas i kontextkortet (förvarning innan gräns).
 **Kvar att utforska (ej byggt):** `outputFormat`-kort, egna `agents` +
 `forwardSubagentText`, `resumeSessionAt` (konversations-rewind), `additionalDirectories`
 + 1M-kontext, `sessionStore`, `Query.readFile`, `onElicitation`/`mcpServerStatus`.
+
+---
+
+## 11. Nivå 5 — Konto, inloggning & inställningar (implementerad)
+
+### 11.1 Kontoverifiering — `Query.accountInfo()`
+Bekräftar credentialen och returnerar `email`, `subscriptionType`, `apiProvider`.
+`/connect/account` verifierar vid inklistring (en probe-query som stänger sig direkt),
+klockans inställningsvy visar **vems konto + plan**. `/connect` kollar alltså inte
+längre bara tokenformatet.
+
+### 11.2 Inloggnings-policy — `settings.forceLoginMethod` m.m.
+`forceLoginMethod: 'claudeai'` låser prenumerations-vägen (aldrig tyst API-billing).
+`permissions.deny`-regler och `includeCoAuthoredBy` konfigurerbara via `settings`.
+
+### 11.3 Språk — `settings.language` + `applyFlagSettings()`
+Per-användare Auto/EN/SV, applicerat **live** → Claude svarar på valt språk.
+
+### 11.4 Inställningsvy på klockan
+Kugghjul från hemskärmen → konto, språk (segmenterad), modell, plan-läge, notiser,
+uppläsning — animerade toggles. Notis-toggeln gejtar push + notify-banners.
+
+### 11.5 Auth-hälsa
+Vid auth-fel (`oauth`/`401`/`expired`/…) visar klockan "Reconnect on /connect".
+
+**Kvar (ej byggt):** `resolveSettings()`-läsning, `managedSettings` enterprise-lockdown
+för granskningsinstansen, `forceLoginOrgUUID`, `outputStyle`, `availableModels`-filter.

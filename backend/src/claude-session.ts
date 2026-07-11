@@ -62,6 +62,8 @@ interface SessionOpts {
   watchTools?: boolean;
   /** Enable SKILL.md skills: 'all' or a list of skill names. */
   skills?: string[] | "all";
+  /** Inline Settings object (login policy, permission rules, language, …). */
+  settings?: Record<string, unknown>;
   /** Called with the per-turn cost so the server can enforce a budget cap. */
   onCost?: (usd: number) => void;
   /** Called when moderation filters a message, for the report log. */
@@ -238,6 +240,7 @@ export class ClaudeSession {
         ...(o.checkpointing ? { enableFileCheckpointing: true } : {}),
         ...(o.settingSources ? { settingSources: o.settingSources } : {}),
         ...(o.skills ? { skills: o.skills } : {}),
+        ...(o.settings && Object.keys(o.settings).length ? { settings: o.settings as never } : {}),
         ...(o.promptSuggestions ? { promptSuggestions: true } : {}),
         ...(o.agentProgress ? { agentProgressSummaries: true } : {}),
         ...(o.watchGuidance ? { hooks: { SessionStart: [watchGuidanceHook] } } : {}),
@@ -338,9 +341,39 @@ export class ClaudeSession {
 
   // --- Runtime controls (streaming-input mode) ------------------------------
 
+  /** Start the CLI without sending a prompt, so control methods (account/usage/models) work. */
+  ensureStarted(): void {
+    if (!this.started) this.start();
+  }
+
+  /** Whether the underlying CLI query has been started (a prompt or control call happened). */
+  isRunning(): boolean {
+    return this.started;
+  }
+
+  // Race a control request against a timeout so a slow/hung CLI can't wedge the WS.
+  private withTimeout<T>(p: Promise<T> | undefined, ms: number, fallback: T): Promise<T> {
+    return Promise.race([
+      (p ?? Promise.resolve(fallback)).catch(() => fallback),
+      new Promise<T>((r) => setTimeout(() => r(fallback), ms)),
+    ]);
+  }
+
   /** Stop the current turn (barge-in). */
   async interrupt(): Promise<void> {
     await this.q?.interrupt?.().catch(() => {});
+  }
+
+  /** Authenticated account: email, subscription type, provider. Null if unavailable. */
+  async accountInfo(): Promise<unknown> {
+    this.ensureStarted();
+    return this.withTimeout(this.q?.accountInfo?.(), 10000, null);
+  }
+
+  /** Apply settings live (e.g. language, permission rules). */
+  async applyFlagSettings(settings: Record<string, unknown>): Promise<void> {
+    this.ensureStarted();
+    await this.q?.applyFlagSettings?.(settings as never).catch(() => {});
   }
 
   /** Switch permission mode live (e.g. toggle plan mode). */
@@ -355,32 +388,23 @@ export class ClaudeSession {
 
   /** Context-window usage breakdown, or null if unavailable. */
   async contextUsage(): Promise<unknown> {
-    try {
-      return (await this.q?.getContextUsage?.()) ?? null;
-    } catch {
-      return null;
-    }
+    this.ensureStarted();
+    return this.withTimeout(this.q?.getContextUsage?.(), 8000, null);
   }
 
   /** Claude-plan rate-limit windows (5h / 7d), or null if unavailable / API key. */
   async planUsage(): Promise<unknown> {
-    try {
-      const q = this.q as unknown as {
-        usage_EXPERIMENTAL_MAY_CHANGE_DO_NOT_RELY_ON_THIS_API_YET?: () => Promise<unknown>;
-      } | null;
-      return (await q?.usage_EXPERIMENTAL_MAY_CHANGE_DO_NOT_RELY_ON_THIS_API_YET?.()) ?? null;
-    } catch {
-      return null;
-    }
+    this.ensureStarted();
+    const q = this.q as unknown as {
+      usage_EXPERIMENTAL_MAY_CHANGE_DO_NOT_RELY_ON_THIS_API_YET?: () => Promise<unknown>;
+    } | null;
+    return this.withTimeout(q?.usage_EXPERIMENTAL_MAY_CHANGE_DO_NOT_RELY_ON_THIS_API_YET?.(), 8000, null);
   }
 
-  /** Available models for a picker, or [] if unavailable (no turn started yet). */
+  /** Available models for a picker, or [] if unavailable. */
   async models(): Promise<unknown[]> {
-    try {
-      return (await this.q?.supportedModels?.()) ?? [];
-    } catch {
-      return [];
-    }
+    this.ensureStarted();
+    return this.withTimeout<unknown[]>(this.q?.supportedModels?.(), 8000, []);
   }
 
   /** Re-send the initialize request after a transport gap; redelivers pending confirmations. */

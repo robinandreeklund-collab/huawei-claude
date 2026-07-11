@@ -45,7 +45,7 @@ import {
 import { getOrCreateSession, disposeSession, type UserSession } from "./user-session.js";
 import { transcribe, SttNotConfiguredError } from "./stt.js";
 import { pushConfigured } from "./config.js";
-import { loadCred, isConnected, credStatus, setCred, validToken } from "./claude-cred.js";
+import { loadCred, isConnected, credStatus, setCred, validToken, probeAccount } from "./claude-cred.js";
 
 const execFileP = promisify(execFile);
 const PUBLIC_DIR = join(dirname(fileURLToPath(import.meta.url)), "..", "public");
@@ -191,6 +191,11 @@ const server = createServer(async (req, res) => {
   }
   if (path === "/connect/status" && req.method === "GET") {
     return json(res, 200, credStatus());
+  }
+  // Verify the connected credential and report who it's authenticated as.
+  if (path === "/connect/account" && req.method === "GET") {
+    const account = await probeAccount();
+    return json(res, 200, { connected: isConnected(), account });
   }
   if (path === "/connect" && req.method === "POST") {
     const { token, secret } = await readBody(req);
@@ -467,7 +472,7 @@ wss.on("connection", (ws: WebSocket) => {
         return;
 
       case "usage": {
-        const usage = await us.claude?.contextUsage();
+        const usage = isConnected() ? await us.claude?.contextUsage() : null;
         send({ type: "usage_result", usage: usage ?? null });
         return;
       }
@@ -484,16 +489,43 @@ wss.on("connection", (ws: WebSocket) => {
         return;
 
       case "models": {
-        const models = (await us.claude?.models()) ?? [];
+        const models = isConnected() ? (await us.claude?.models()) ?? [] : [];
         send({ type: "models_result", models });
         return;
       }
 
       case "plan_usage": {
-        const usage = await us.claude?.planUsage();
+        const usage = isConnected() ? await us.claude?.planUsage() : null;
         send({ type: "plan_usage_result", usage: usage ?? null });
         return;
       }
+
+      // --- Account & settings ---------------------------------------------
+      case "account": {
+        const account = isConnected() ? await us.claude?.accountInfo() : null;
+        send({ type: "account_result", account: account ?? null });
+        return;
+      }
+
+      case "settings_get":
+        send({
+          type: "settings_result",
+          language: us.language,
+          model: us.model ?? null,
+          planMode: us.planMode,
+          notifications: us.notifications,
+        });
+        return;
+
+      case "set_language":
+        await us.setLanguage(String(msg.lang ?? ""));
+        send({ type: "language_set", lang: us.language });
+        return;
+
+      case "set_notifications":
+        us.notifications = Boolean(msg.on);
+        send({ type: "notifications_set", on: us.notifications });
+        return;
 
       // --- Session management (Chats): rename / delete / branch ------------
       case "rename_session":
@@ -584,6 +616,7 @@ server.listen(config.port, () => {
   console.log(`  suggest:    ${config.promptSuggestions}  progress: ${config.agentProgress}`);
   console.log(`  sandbox:    ${config.sandbox}  checkpointing: ${config.checkpointing}`);
   console.log(`  watchTools: ${config.watchTools}  skills: ${config.skills || "off"}`);
+  console.log(`  login:      ${config.forceSubscription ? "subscription-forced" : "auto"}  lang: ${config.language || "auto"}  denyRules: ${config.denyRules.length}`);
   console.log(`  mcp:        ${mcpConfigured() ? Object.keys(mcpServers()).join(", ") : "none"}`);
   console.log(`  stt:        ${sttConfigured() ? "configured" : "not configured"}`);
   console.log(`  push:       ${pushConfigured() ? "configured" : "not configured (logs instead)"}`);

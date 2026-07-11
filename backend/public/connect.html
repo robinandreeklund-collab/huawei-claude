@@ -149,6 +149,7 @@
             statusEl.className = "status on";
             $("stTitle").textContent = "Connected";
             $("stMeta").textContent = `${KIND[s.kind] ?? s.kind} · ${SRC[s.source] ?? s.source}`;
+            verifyAccount();
           } else {
             statusEl.className = "status off";
             $("stTitle").textContent = "Not connected";
@@ -165,6 +166,21 @@
         const m = $("msg");
         m.className = `msg show ${kind}`;
         m.textContent = text;
+      }
+
+      // Verify the credential against Anthropic and show whose account it is.
+      async function verifyAccount() {
+        try {
+          const r = await fetch("/connect/account");
+          const d = await r.json();
+          if (d && d.account) {
+            const a = d.account;
+            const plan = a.subscriptionType || (a.apiProvider === "firstParty" ? "Claude subscription" : a.apiProvider) || "connected";
+            $("stMeta").textContent = `${a.email || "verified"} · ${String(plan).replace(/_/g, " ")}`;
+          }
+        } catch {
+          /* verification is best-effort */
+        }
       }
 
       async function connect() {

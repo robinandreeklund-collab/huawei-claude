@@ -118,6 +118,10 @@ svarar servern `stt_unavailable` och klienten faller tillbaka på textinmatning.
 | `WATCH_GUIDANCE` | `true` | SessionStart-hook: korta, glanceable svar |
 | `WATCH_TOOLS` | `true` | Ger Claude verktyg att agera på klockan (vibrera/notis/timer/hälsa/plats) |
 | `SKILLS` | — | Aktivera SKILL.md-skills: `all` eller komma-lista |
+| `FORCE_SUBSCRIPTION` | `true` | Lås login till prenumeration (`forceLoginMethod: claudeai`) |
+| `DENY_RULES` | — | Deklarativa permission-deny-regler, t.ex. `Bash(git push:*)` |
+| `CO_AUTHORED` | `true` | Inkludera Co-authored-by-rad i commits Claude gör |
+| `CLAUDE_LANGUAGE` | — | Standardspråk för Claudes svar (per-användare kan överstyra) |
 | `DATA_DIR` | — | Persistent bas för historik/token (överlever omstart) |
 | `DISALLOWED_TOOLS` | — | Verktyg att ta bort helt (komma-sep.) |
 | `SANDBOX` | `false` | Isolerad kommandokörning (bubblewrap) |
@@ -165,6 +169,10 @@ Klient → server:
 { "type": "rename_session", "id": "…", "title": "Nytt namn" }
 { "type": "delete_session", "id": "…" }
 { "type": "branch_session", "id": "…" }  // grena en chatt (forkSession)
+{ "type": "account" }                    // hämta anslutet konto (accountInfo)
+{ "type": "settings_get" }               // hämta språk/modell/plan/notiser
+{ "type": "set_language", "lang": "svenska" }   // Claudes svarsspråk
+{ "type": "set_notifications", "on": false }
 ```
 Server → klient: `authed` (`consented`, `demoMode`, `planMode`) · `needs_consent` ·
 `consented` · `accepted` · `stream_start` / `stream_delta` (`text`) / `stream_end` /
@@ -177,6 +185,8 @@ ev. `filtered`) · `tool_use` · `progress` (`text`; live summering) · `suggest
 (`action`: vibrate/notify/timer — Claude agerar på klockan) · `watch_query`
 (`id`, `kind`: health/location — begär sensor-värde) · `session_renamed` /
 `session_deleted` · `transcribing` · `transcript` · `stt_unavailable` · `reported` ·
+`account_result` (`account`: email/plan/provider) · `settings_result` (`language`,
+`model`, `planMode`, `notifications`) · `language_set` · `notifications_set` ·
 `result` (kostnad) · `turn_done` · `error`.
 
 Svaret streamas token-för-token (`includePartialMessages` i Agent SDK). Moderering
@@ -238,6 +248,19 @@ Byggt enligt [`../docs/sdk-analys.md`](../docs/sdk-analys.md):
   på en chatt (Rename / Branch / Delete).
 - **Modellväljare** — `supportedModels()` → picker i menyn (`set_model`).
 - **Plan-gränser** — `usage_EXPERIMENTAL…()` → 5h/7d-fönster i kontextkortet.
+
+### Nivå 5 — Konto, inloggning & inställningar
+- **Kontoverifiering** — `accountInfo()` bekräftar credentialen och visar
+  **vems konto + plan** (Pro/Max/API). `/connect/account` verifierar vid inklistring;
+  klockans inställningsvy visar kontot. `/connect` kollar alltså inte längre bara
+  tokenformatet — den bekräftar att den faktiskt fungerar.
+- **Inloggnings-policy** — `forceLoginMethod: 'claudeai'` (via `settings`) låser
+  prenumerations-vägen; `permissions.deny`-regler + `includeCoAuthoredBy` konfigurerbara.
+- **Språk** — per-användare `language` (Auto/EN/SV) applicerat live via
+  `applyFlagSettings()` → Claude svarar på valt språk.
+- **Inställningsvy på klockan** — kugghjul från hemskärmen: konto, språk, modell,
+  plan-läge, notiser, uppläsning. Notis-toggeln gejtar push + notify-banners.
+- **Auth-hälsa** — vid auth-fel visar klockan "Reconnect on /connect".
 
 ## Deploya till Google Cloud Run
 

@@ -7,7 +7,7 @@
 // notification is sent so the watch vibrates and alerts.
 
 import type { WebSocket } from "ws";
-import { config, mcpServers } from "./config.js";
+import { config, mcpServers, buildSettings } from "./config.js";
 import { ClaudeSession } from "./claude-session.js";
 import { addSpend, addReport, getPushToken } from "./auth.js";
 import { notify } from "./pushkit.js";
@@ -31,6 +31,8 @@ export class UserSession {
   effort?: string;
   settingSources?: ("user" | "project" | "local")[];
   planMode = false;
+  language = ""; // Claude's reply language ("" = default); persists across contexts
+  notifications = true; // whether watch-action notifications/buzz reach the wrist
 
   private buffer: Event[] = [];
   private lastAssistant = "";
@@ -90,6 +92,9 @@ export class UserSession {
   emit = (ev: Event): void => {
     if (ev.type === "assistant" && !ev.filtered) this.lastAssistant += `${ev.text ?? ""} `;
 
+    // Notifications toggle gates Claude's notify banners (vibrate/timer still work).
+    if (ev.type === "watch_action" && ev.action === "notify" && !this.notifications) return;
+
     // Live token-stream events are only useful in real time. When detached we
     // drop them (the buffered final `assistant` event carries the full text) so
     // a long streamed answer can't flood the buffer and evict real events.
@@ -111,6 +116,7 @@ export class UserSession {
   };
 
   private pushSummary(): void {
+    if (!this.notifications) return; // wearer turned background alerts off
     // Prefer the model's latest progress summary, fall back to the last answer.
     const body =
       this.lastProgress.trim().slice(0, 140) ||
@@ -121,6 +127,13 @@ export class UserSession {
       body,
       data: { token: this.token, context: this.contextLabel },
     });
+  }
+
+  /** Change Claude's reply language. Applies live if a turn is running; otherwise
+   * it's baked into the next session's settings (no need to spawn the CLI early). */
+  async setLanguage(lang: string): Promise<void> {
+    this.language = lang;
+    if (this.claude?.isRunning()) await this.claude.applyFlagSettings(buildSettings(lang));
   }
 
   // --- Claude session ------------------------------------------------------
@@ -143,6 +156,7 @@ export class UserSession {
       watchGuidance: config.watchGuidance,
       watchTools: config.watchTools,
       skills: config.skills === "all" ? "all" : config.skills ? config.skills.split(",").map((s) => s.trim()).filter(Boolean) : undefined,
+      settings: buildSettings(this.language),
       mcpServers: mcpServers(),
       disallowedTools: config.disallowedTools,
       sandbox: config.sandbox,
