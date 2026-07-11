@@ -146,6 +146,39 @@
       .tdots span { width: 6px; height: 6px; border-radius: 50%; background: var(--muted); animation: dotb 1.1s infinite; }
       .tdots span:nth-child(2) { animation-delay: .15s; } .tdots span:nth-child(3) { animation-delay: .3s; }
       @media (prefers-reduced-motion: reduce) { * { animation-duration: .01ms !important; transition-duration: .01ms !important; } }
+
+      /* --- Splash / loading (Claude design) --- */
+      .splash { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center;
+        justify-content: center; gap: 1rem;
+        background: radial-gradient(circle at 50% 41%, #302d29 0%, var(--bg) 68%); }
+      .splash .ring { position: absolute; inset: 0; width: 100%; height: 100%; transform: rotate(-90deg); }
+      .splash .ring .track { fill: none; stroke: var(--surface); stroke-width: 1.3; }
+      .splash .ring .arc { fill: none; stroke: var(--clay); stroke-width: 1.3; stroke-linecap: round;
+        stroke-dasharray: 289; stroke-dashoffset: 289; animation: ringSweep 1.5s var(--ease) forwards; }
+      @keyframes ringSweep { to { stroke-dashoffset: 0; } }
+      .sparkWrap { position: relative; width: 100px; height: 100px; display: grid; place-items: center;
+        animation: sparkIn .62s var(--ease) both; }
+      @keyframes sparkIn { from { opacity: 0; transform: scale(.55); } to { opacity: 1; transform: none; } }
+      .sparkWrap .glow { position: absolute; width: 128px; height: 128px; border-radius: 50%;
+        background: radial-gradient(circle, var(--clay-tint) 0%, transparent 64%);
+        animation: glowPulse 2.6s ease-in-out infinite; }
+      @keyframes glowPulse { 0%,100% { opacity: .45; transform: scale(.9); } 50% { opacity: 1; transform: scale(1.1); } }
+      .spark2 { position: relative; z-index: 2; animation: spinSlow 22s linear infinite; }
+      .spark2 line { stroke: var(--clay); stroke-width: 2.1; stroke-linecap: round;
+        stroke-dasharray: 12; stroke-dashoffset: 12;
+        animation: rayDraw .55s var(--ease) forwards, rayShimmer 2.8s ease-in-out infinite; }
+      @keyframes rayDraw { to { stroke-dashoffset: 0; } }
+      @keyframes rayShimmer { 0%,100% { opacity: .8; } 50% { opacity: 1; } }
+      .splash .word { font-size: 1.55rem; color: var(--ink); letter-spacing: .01em; opacity: 0;
+        animation: fadeUp .5s var(--ease) .5s forwards; }
+      .splash .load { display: inline-flex; gap: 5px; opacity: 0; animation: fadeUp .4s var(--ease) .95s forwards; }
+      .splash .load span { width: 5px; height: 5px; border-radius: 50%; background: var(--muted); animation: dotb 1.2s infinite; }
+      .splash .load span:nth-child(2) { animation-delay: .16s; } .splash .load span:nth-child(3) { animation-delay: .32s; }
+      /* Reduced motion: snap to the finished frame so the spark is always visible. */
+      @media (prefers-reduced-motion: reduce) {
+        .spark2 line { stroke-dashoffset: 0; } .splash .ring .arc { stroke-dashoffset: 0; }
+        .splash .word, .splash .load { opacity: 1; }
+      }
     </style>
   </head>
   <body>
@@ -197,6 +230,13 @@
         for (let i = 0; i < n; i++) { const a = (i * 2 * Math.PI) / n;
           l += `<line x1="${(cx + r0 * Math.cos(a)).toFixed(2)}" y1="${(cy + r0 * Math.sin(a)).toFixed(2)}" x2="${(cx + r1 * Math.cos(a)).toFixed(2)}" y2="${(cy + r1 * Math.sin(a)).toFixed(2)}"/>`; }
         return `<svg class="burst" width="${size}" height="${size}" viewBox="0 0 24 24">${l}</svg>`;
+      }
+      // Claude spark whose rays draw outward from the centre, staggered around the circle.
+      function sparkRays(size = 76) {
+        const cx = 12, cy = 12, r0 = 2.9, r1 = 9.4, n = 12; let l = "";
+        for (let i = 0; i < n; i++) { const a = (i * 2 * Math.PI) / n - Math.PI / 2;
+          l += `<line x1="${(cx + r0 * Math.cos(a)).toFixed(2)}" y1="${(cy + r0 * Math.sin(a)).toFixed(2)}" x2="${(cx + r1 * Math.cos(a)).toFixed(2)}" y2="${(cy + r1 * Math.sin(a)).toFixed(2)}" style="animation-delay:${(i * 0.045).toFixed(3)}s,${(i * 0.045).toFixed(3)}s"/>`; }
+        return `<svg class="spark2" width="${size}" height="${size}" viewBox="0 0 24 24">${l}</svg>`;
       }
 
       const view = document.getElementById("view");
@@ -305,6 +345,16 @@
       function back() { dir = "back"; const prev = backStack.pop(); if (prev) prev(); }
 
       // --- Screens ---
+      function showSplash() {
+        nav.mode = "scroll"; backStack = []; dir = "none"; setTop("hidden");
+        view.innerHTML = `<div class="splash">
+          <svg class="ring" viewBox="0 0 100 100"><circle class="track" cx="50" cy="50" r="46"/><circle class="arc" cx="50" cy="50" r="46"/></svg>
+          <div class="sparkWrap"><span class="glow"></span>${sparkRays(78)}</div>
+          <div class="word serif">Claude</div>
+          <div class="load"><span></span><span></span><span></span></div>
+        </div>`;
+        bindScroller();
+      }
       function showPairing() {
         nav.mode = "scroll"; backStack = []; setTop("hidden");
         view.innerHTML = `<div class="center">${burst(48)}<h2 class="serif">Pair</h2>
@@ -450,9 +500,15 @@
 
       // --- Flow ---
       async function boot() {
-        meta = await (await fetch("/meta")).json();
-        showPairing();
-        const dc = await (await fetch("/device/code", { method: "POST" })).json();
+        showSplash();
+        // Let the splash animation breathe even on a fast network.
+        const minSplash = new Promise((r) => setTimeout(r, 1700));
+        const metaP = fetch("/meta").then((r) => r.json()).catch(() => ({ demoMode: false, stt: false }));
+        const dcP = fetch("/device/code", { method: "POST" }).then((r) => r.json());
+        meta = await metaP;
+        const dc = await dcP;
+        await minSplash;
+        dir = "fade"; showPairing();
         deviceCode = dc.device_code;
         document.getElementById("qr").innerHTML = '<img src="' + dc.qr_data_url + '">';
         document.getElementById("uc").textContent = dc.user_code;
