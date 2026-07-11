@@ -13,8 +13,8 @@ import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
 import { WebSocketServer, type WebSocket } from "ws";
 import QRCode from "qrcode";
-import { listSessions } from "@anthropic-ai/claude-agent-sdk";
-import { config, sttConfigured } from "./config.js";
+import { listSessions, getSessionMessages } from "@anthropic-ai/claude-agent-sdk";
+import { config, sttConfigured, mcpConfigured, mcpServers } from "./config.js";
 import {
   listCodeRepos,
   codeRepoPath,
@@ -75,6 +75,29 @@ async function seedWorkspaceIfEmpty(dir: string): Promise<void> {
   } catch {
     /* best effort */
   }
+}
+
+// Per-surface model / effort / setting-sources. Chats run a fast small model;
+// Claude Code loads the repo's CLAUDE.md (settingSources: ['project']).
+type Surface = "chat" | "project" | "code";
+function applyScope(us: UserSession, surface: Surface): void {
+  us.model = config.models[surface] || undefined;
+  us.effort = config.effort[surface] || undefined;
+  us.settingSources = surface === "code" ? ["project"] : undefined;
+}
+
+/** Pull the visible text out of a stored SessionMessage's raw `message`. */
+function extractText(message: unknown): string {
+  const content = (message as { content?: unknown })?.content;
+  if (typeof content === "string") return content;
+  if (Array.isArray(content)) {
+    return content
+      .filter((b) => (b as { type?: string })?.type === "text")
+      .map((b) => (b as { text?: string }).text ?? "")
+      .join("")
+      .trim();
+  }
+  return "";
 }
 
 /** Compact relative time for list subtitles, e.g. "5 min ago", "2 d ago". */
@@ -257,6 +280,22 @@ wss.on("connection", (ws: WebSocket) => {
     us.claude.prompt(text);
   };
 
+  // Render a resumed session's prior messages so the chat opens with history,
+  // not an empty feed (getSessionMessages).
+  const replayHistory = async (sessionId: string | undefined, dir: string) => {
+    if (!sessionId) return;
+    try {
+      const msgs = await getSessionMessages(sessionId, { dir, limit: 40 });
+      const items = msgs
+        .filter((m) => m.type === "user" || m.type === "assistant")
+        .map((m) => ({ role: m.type, text: extractText(m.message) }))
+        .filter((it) => it.text);
+      if (items.length) send({ type: "history", items });
+    } catch {
+      /* no history / unreadable */
+    }
+  };
+
   ws.on("message", async (raw, isBinary) => {
     if (isBinary) return; // audio arrives as base64 in JSON, not binary frames
     let msg: Record<string, unknown>;
@@ -275,9 +314,10 @@ wss.on("connection", (ws: WebSocket) => {
           us.cwd = config.chatsDir;
           us.contextLabel = "Claude";
           us.systemPrompt = undefined;
+          applyScope(us, "chat");
           us.rebuildClaude();
         }
-        send({ type: "authed", consented: hasConsent(token), demoMode: config.demoMode, push: pushConfigured(), claude: isConnected() });
+        send({ type: "authed", consented: hasConsent(token), demoMode: config.demoMode, push: pushConfigured(), claude: isConnected(), planMode: us.planMode });
       } else {
         send({ type: "error", message: "invalid or expired token" });
         ws.close();
@@ -355,6 +395,7 @@ wss.on("connection", (ws: WebSocket) => {
         us.cwd = chatsDir();
         us.contextLabel = "New chat";
         us.systemPrompt = undefined;
+        applyScope(us, "chat");
         us.rebuildClaude();
         send({ type: "chat_opened", context: us.contextLabel, kind: "chat" });
         return;
@@ -363,8 +404,10 @@ wss.on("connection", (ws: WebSocket) => {
         us.cwd = chatsDir();
         us.contextLabel = "Conversation";
         us.systemPrompt = undefined;
+        applyScope(us, "chat");
         us.rebuildClaude(String(msg.id ?? ""));
         send({ type: "chat_opened", context: us.contextLabel, kind: "chat" });
+        await replayHistory(String(msg.id ?? ""), us.cwd);
         return;
 
       case "open_project": {
@@ -373,9 +416,11 @@ wss.on("connection", (ws: WebSocket) => {
         us.cwd = proj.path;
         us.contextLabel = proj.name;
         us.systemPrompt = proj.instructions || undefined;
+        applyScope(us, "project");
         const last = await listSessions({ dir: us.cwd, limit: 1 }).catch(() => []);
         us.rebuildClaude(last[0]?.sessionId);
         send({ type: "chat_opened", context: us.contextLabel, kind: "project" });
+        await replayHistory(last[0]?.sessionId, us.cwd);
         return;
       }
 
@@ -385,9 +430,45 @@ wss.on("connection", (ws: WebSocket) => {
         us.cwd = repo;
         us.contextLabel = String(msg.id);
         us.systemPrompt = undefined;
+        applyScope(us, "code");
         const last = await listSessions({ dir: us.cwd, limit: 1 }).catch(() => []);
         us.rebuildClaude(last[0]?.sessionId);
         send({ type: "chat_opened", context: us.contextLabel, kind: "code" });
+        await replayHistory(last[0]?.sessionId, us.cwd);
+        return;
+      }
+
+      // --- Runtime controls (SDK streaming-input methods) -----------------
+      case "stop":
+        await us.claude?.interrupt();
+        send({ type: "stopped" });
+        return;
+
+      case "confirm":
+        us.claude?.resolveConfirm(String(msg.id ?? ""), Boolean(msg.allow));
+        return;
+
+      case "plan_mode":
+        us.planMode = Boolean(msg.on);
+        await us.claude?.setPermissionMode(us.planMode ? "plan" : "acceptEdits");
+        send({ type: "plan_mode", on: us.planMode });
+        return;
+
+      case "set_model":
+        us.model = String(msg.model ?? "") || undefined;
+        await us.claude?.setModel(us.model);
+        send({ type: "model_set", model: us.model ?? null });
+        return;
+
+      case "usage": {
+        const usage = await us.claude?.contextUsage();
+        send({ type: "usage_result", usage: usage ?? null });
+        return;
+      }
+
+      case "rewind": {
+        const result = await us.claude?.rewindLast();
+        send({ type: "rewind_result", ...(result ?? { ok: false, error: "no session" }) });
         return;
       }
 
@@ -423,7 +504,7 @@ wss.on("connection", (ws: WebSocket) => {
           if (text) runPrompt(text);
         } catch (err) {
           if (err instanceof SttNotConfiguredError) send({ type: "stt_unavailable" });
-          else send({ type: "error", message: "transkribering misslyckades" });
+          else send({ type: "error", message: "transcription failed" });
         }
         return;
       }
@@ -438,9 +519,13 @@ wss.on("connection", (ws: WebSocket) => {
 
 server.listen(config.port, () => {
   console.log(`Backend listening on :${config.port}`);
-  console.log(`  workspace:  ${config.workspaceDir}`);
-  console.log(`  model:      ${config.model ?? "(SDK default)"}`);
+  console.log(`  data dir:   ${config.dataDir || "(ephemeral /tmp)"}`);
+  console.log(`  model:      ${config.model ?? `chat=${config.models.chat || "default"} code=${config.models.code || "default"}`}`);
+  console.log(`  fallback:   ${config.fallbackModel || "(none)"}`);
   console.log(`  demoMode:   ${config.demoMode}`);
+  console.log(`  suggest:    ${config.promptSuggestions}  progress: ${config.agentProgress}`);
+  console.log(`  sandbox:    ${config.sandbox}  checkpointing: ${config.checkpointing}`);
+  console.log(`  mcp:        ${mcpConfigured() ? Object.keys(mcpServers()).join(", ") : "none"}`);
   console.log(`  stt:        ${sttConfigured() ? "configured" : "not configured"}`);
   console.log(`  push:       ${pushConfigured() ? "configured" : "not configured (logs instead)"}`);
   const cs = credStatus();

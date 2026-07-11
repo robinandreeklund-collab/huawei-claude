@@ -7,7 +7,7 @@
 // notification is sent so the watch vibrates and alerts.
 
 import type { WebSocket } from "ws";
-import { config } from "./config.js";
+import { config, mcpServers } from "./config.js";
 import { ClaudeSession } from "./claude-session.js";
 import { addSpend, addReport, getPushToken } from "./auth.js";
 import { notify } from "./pushkit.js";
@@ -27,9 +27,14 @@ export class UserSession {
   cwd = config.chatsDir;
   contextLabel = "Claude";
   systemPrompt?: string;
+  model?: string;
+  effort?: string;
+  settingSources?: ("user" | "project" | "local")[];
+  planMode = false;
 
   private buffer: Event[] = [];
   private lastAssistant = "";
+  private lastProgress = "";
   private idleTimer: NodeJS.Timeout | null = null;
   private onDispose: () => void;
 
@@ -87,7 +92,7 @@ export class UserSession {
     // a long streamed answer can't flood the buffer and evict real events.
     const transient =
       ev.type === "stream_start" || ev.type === "stream_delta" ||
-      ev.type === "stream_end" || ev.type === "stream_filter";
+      ev.type === "stream_end" || ev.type === "stream_filter" || ev.type === "progress";
 
     if (this.live()) this.wsSend(ev);
     else if (!transient) {
@@ -102,7 +107,11 @@ export class UserSession {
   };
 
   private pushSummary(): void {
-    const body = this.lastAssistant.trim().slice(0, 140) || "The response is ready.";
+    // Prefer the model's latest progress summary, fall back to the last answer.
+    const body =
+      this.lastProgress.trim().slice(0, 140) ||
+      this.lastAssistant.trim().slice(0, 140) ||
+      "The response is ready.";
     notify(this.pushToken, {
       title: `Claude · ${this.contextLabel}`,
       body,
@@ -114,13 +123,31 @@ export class UserSession {
 
   rebuildClaude(resume?: string): void {
     this.claude?.close();
+    this.lastProgress = "";
     this.claude = new ClaudeSession(this.emit, {
       cwd: this.cwd,
-      model: config.model,
+      // config.model (global CLAUDE_MODEL) overrides the per-surface model.
+      model: config.model || this.model || undefined,
+      effort: this.effort || undefined,
+      permissionMode: this.planMode ? "plan" : "acceptEdits",
+      fallbackModel: config.fallbackModel || undefined,
+      maxTurns: config.maxTurns || undefined,
+      maxBudgetUsd: config.demoMode ? config.demoBudgetUsd : undefined,
+      taskBudgetTokens: config.taskBudgetTokens || undefined,
+      promptSuggestions: config.promptSuggestions,
+      agentProgress: config.agentProgress,
+      watchGuidance: config.watchGuidance,
+      mcpServers: mcpServers(),
+      disallowedTools: config.disallowedTools,
+      sandbox: config.sandbox,
+      checkpointing: config.checkpointing,
+      ...(this.settingSources ? { settingSources: this.settingSources } : {}),
       ...(resume ? { resume } : {}),
       ...(this.systemPrompt ? { systemPrompt: this.systemPrompt } : {}),
       onCost: (usd) => addSpend(this.token, usd),
       onFiltered: (reason, text) => addReport(`auto:${reason}`, text),
+      onSuggestion: (text) => this.emit({ type: "suggestion", text }),
+      onProgress: (text) => { this.lastProgress = text; this.emit({ type: "progress", text }); },
     });
   }
 

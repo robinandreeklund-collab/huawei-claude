@@ -3,14 +3,19 @@
 //
 // query() takes a streaming input (AsyncIterable of SDKUserMessage), which lets
 // us keep one long-lived Claude Code conversation per connection and feed it new
-// prompts as the user speaks/types.
+// prompts as the user speaks/types. Streaming input mode also unlocks the runtime
+// control methods (interrupt, setModel, setPermissionMode, getContextUsage,
+// rewindFiles) used by the watch.
 
 import {
   query,
+  getSessionMessages,
   type Query,
   type SDKUserMessage,
   type SDKMessage,
   type CanUseTool,
+  type PermissionMode,
+  type HookCallbackMatcher,
 } from "@anthropic-ai/claude-agent-sdk";
 import { moderate, FILTERED_NOTICE } from "./moderation.js";
 import { spawnEnv } from "./claude-cred.js";
@@ -20,14 +25,46 @@ type Emit = (event: Record<string, unknown>) => void;
 interface SessionOpts {
   cwd: string;
   model?: string;
+  /** Reasoning effort: 'low' | 'medium' | 'high' | 'xhigh' | 'max' (empty => inherit). */
+  effort?: string;
   /** Resume an existing Claude conversation by session UUID. */
   resume?: string;
   /** Custom system prompt (used to carry a Project's instructions/context). */
   systemPrompt?: string;
+  /** 'plan' = read-only planning; 'acceptEdits' = auto-accept file edits (default). */
+  permissionMode?: PermissionMode;
+  /** Comma-separated fallback models tried when the primary is overloaded. */
+  fallbackModel?: string;
+  /** Hard turn cap (0 => unset). */
+  maxTurns?: number;
+  /** Hard USD budget for the whole session query (0 => unset). */
+  maxBudgetUsd?: number;
+  /** API-side token budget so the model paces itself (0 => off). */
+  taskBudgetTokens?: number;
+  /** Ask the model to emit a predicted next prompt after each turn. */
+  promptSuggestions?: boolean;
+  /** Periodic progress summaries for long turns. */
+  agentProgress?: boolean;
+  /** MCP servers to expose as tools. */
+  mcpServers?: Record<string, unknown>;
+  /** Tools removed entirely from the model's context. */
+  disallowedTools?: string[];
+  /** Sandbox command execution (degrades gracefully if unavailable). */
+  sandbox?: boolean;
+  /** Enable file checkpointing so the session can be rewound (undo). */
+  checkpointing?: boolean;
+  /** Which filesystem setting sources to load (e.g. ['project'] to read CLAUDE.md). */
+  settingSources?: ("user" | "project" | "local")[];
+  /** Inject a SessionStart hint to keep answers short/glanceable for the watch. */
+  watchGuidance?: boolean;
   /** Called with the per-turn cost so the server can enforce a budget cap. */
   onCost?: (usd: number) => void;
   /** Called when moderation filters a message, for the report log. */
   onFiltered?: (reason: string, text: string) => void;
+  /** Called with the model's predicted next prompt. */
+  onSuggestion?: (text: string) => void;
+  /** Called with a short progress summary while a long turn runs. */
+  onProgress?: (text: string) => void;
 }
 
 // A minimal push-driven async queue turning discrete prompt() calls into the
@@ -68,15 +105,36 @@ class MessageQueue<T> implements AsyncIterable<T> {
 }
 
 const DANGEROUS = /\b(git\s+push|rm\s+-rf|curl|wget|npm\s+publish)\b/;
+const CONFIRM_TIMEOUT_MS = 2 * 60 * 1000;
+
+// Injected via a SessionStart hook so it applies to every surface (chats, projects,
+// code) without disturbing a Project's own systemPrompt.
+const WATCH_GUIDANCE =
+  "You are being controlled from a small round smartwatch screen. Keep replies " +
+  "short, glanceable and conversational — usually a sentence or two. Avoid long " +
+  "code dumps; summarize what you did and offer to expand if asked.";
+
+// A SessionStart hook that adds the watch guidance as extra context.
+const watchGuidanceHook: HookCallbackMatcher = {
+  hooks: [
+    async () => ({
+      hookSpecificOutput: { hookEventName: "SessionStart", additionalContext: WATCH_GUIDANCE },
+    }),
+  ],
+};
 
 export class ClaudeSession {
   private queue = new MessageQueue<SDKUserMessage>();
   private q: Query | null = null;
   private started = false;
+  private sessionId: string | null = null;
   // Incremental moderation of the text currently being streamed, so flagged
   // content is cut off mid-stream instead of shown and then retracted.
   private streamBuf = "";
   private streamBlocked = false;
+  // Pending phone confirmations for dangerous tool calls (spec §7).
+  private pendingConfirm = new Map<string, (allow: boolean) => void>();
+  private confirmSeq = 0;
 
   constructor(
     private readonly emit: Emit,
@@ -96,26 +154,59 @@ export class ClaudeSession {
   private canUseTool: CanUseTool = async (toolName, input) => {
     const command = String((input as { command?: unknown }).command ?? "");
     if (toolName === "Bash" && DANGEROUS.test(command)) {
-      // Prototype gate: surface it and deny. Real flow (spec §7) sends this to
-      // the phone for an explicit "confirm" before allowing.
-      this.emit({ type: "needs_confirmation", tool: toolName, command });
-      return { behavior: "deny", message: "Blocked pending confirmation (prototype)" };
+      // Real confirmation loop: surface it to the phone and wait for a decision.
+      const id = `c${++this.confirmSeq}`;
+      this.emit({ type: "needs_confirmation", id, tool: toolName, command });
+      const allow = await new Promise<boolean>((resolve) => {
+        this.pendingConfirm.set(id, resolve);
+        setTimeout(() => {
+          if (this.pendingConfirm.delete(id)) resolve(false);
+        }, CONFIRM_TIMEOUT_MS);
+      });
+      return allow
+        ? { behavior: "allow", updatedInput: input }
+        : { behavior: "deny", message: "Denied by user" };
     }
     return { behavior: "allow", updatedInput: input };
   };
 
+  /** Resolve a pending confirmation from the client (allow/deny). */
+  resolveConfirm(id: string, allow: boolean): void {
+    const r = this.pendingConfirm.get(id);
+    if (r) {
+      this.pendingConfirm.delete(id);
+      r(allow);
+    }
+  }
+
   private start(): void {
     this.started = true;
+    const o = this.opts;
     this.q = query({
       prompt: this.queue,
       options: {
-        cwd: this.opts.cwd,
-        ...(this.opts.model ? { model: this.opts.model } : {}),
-        ...(this.opts.resume ? { resume: this.opts.resume } : {}),
-        ...(this.opts.systemPrompt ? { systemPrompt: this.opts.systemPrompt } : {}),
+        cwd: o.cwd,
+        ...(o.model ? { model: o.model } : {}),
+        ...(o.effort ? { effort: o.effort as never } : {}),
+        ...(o.resume ? { resume: o.resume } : {}),
+        ...(o.systemPrompt ? { systemPrompt: o.systemPrompt } : {}),
+        ...(o.fallbackModel ? { fallbackModel: o.fallbackModel } : {}),
+        ...(o.maxTurns ? { maxTurns: o.maxTurns } : {}),
+        ...(o.maxBudgetUsd ? { maxBudgetUsd: o.maxBudgetUsd } : {}),
+        ...(o.taskBudgetTokens ? { taskBudget: { total: o.taskBudgetTokens } } : {}),
+        ...(o.mcpServers && Object.keys(o.mcpServers).length
+          ? { mcpServers: o.mcpServers as never }
+          : {}),
+        ...(o.disallowedTools?.length ? { disallowedTools: o.disallowedTools } : {}),
+        ...(o.sandbox ? { sandbox: { enabled: true, failIfUnavailable: false } } : {}),
+        ...(o.checkpointing ? { enableFileCheckpointing: true } : {}),
+        ...(o.settingSources ? { settingSources: o.settingSources } : {}),
+        ...(o.promptSuggestions ? { promptSuggestions: true } : {}),
+        ...(o.agentProgress ? { agentProgressSummaries: true } : {}),
+        ...(o.watchGuidance ? { hooks: { SessionStart: [watchGuidanceHook] } } : {}),
         env: spawnEnv(), // inject the connected Claude credential (subscription/API key)
         includePartialMessages: true, // stream assistant text token-by-token to the watch
-        permissionMode: "acceptEdits",
+        permissionMode: o.permissionMode ?? "acceptEdits",
         canUseTool: this.canUseTool,
       },
     });
@@ -164,6 +255,10 @@ export class ClaudeSession {
   }
 
   private forward(message: SDKMessage): void {
+    // Capture the session id from any message that carries it (for rewind).
+    const sid = (message as { session_id?: string }).session_id;
+    if (sid) this.sessionId = sid;
+
     if (message.type === "stream_event") {
       this.forwardStream(message);
     } else if (message.type === "assistant") {
@@ -183,6 +278,16 @@ export class ClaudeSession {
           }
         }
       }
+    } else if (message.type === "system") {
+      // Progress summaries for long turns (agentProgressSummaries).
+      const m = message as { subtype?: string; summary?: string; description?: string; last_tool_name?: string };
+      if (m.subtype === "task_progress") {
+        const text = m.summary || m.description || m.last_tool_name || "";
+        if (text) this.opts.onProgress?.(text);
+      }
+    } else if (message.type === "prompt_suggestion") {
+      const s = (message as { suggestion?: string }).suggestion;
+      if (s) this.opts.onSuggestion?.(s);
     } else if (message.type === "result") {
       this.opts.onCost?.(message.total_cost_usd);
       this.emit({
@@ -194,7 +299,50 @@ export class ClaudeSession {
     }
   }
 
+  // --- Runtime controls (streaming-input mode) ------------------------------
+
+  /** Stop the current turn (barge-in). */
+  async interrupt(): Promise<void> {
+    await this.q?.interrupt?.().catch(() => {});
+  }
+
+  /** Switch permission mode live (e.g. toggle plan mode). */
+  async setPermissionMode(mode: PermissionMode): Promise<void> {
+    await this.q?.setPermissionMode?.(mode).catch(() => {});
+  }
+
+  /** Switch model live. */
+  async setModel(model?: string): Promise<void> {
+    await this.q?.setModel?.(model).catch(() => {});
+  }
+
+  /** Context-window usage breakdown, or null if unavailable. */
+  async contextUsage(): Promise<unknown> {
+    try {
+      return (await this.q?.getContextUsage?.()) ?? null;
+    } catch {
+      return null;
+    }
+  }
+
+  /** Undo the file changes from the most recent turn (rewind to last user message). */
+  async rewindLast(): Promise<{ ok: boolean; error?: string; files?: number }> {
+    if (!this.q || !this.sessionId) return { ok: false, error: "no session" };
+    const msgs = await getSessionMessages(this.sessionId, { dir: this.opts.cwd }).catch(() => []);
+    const users = msgs.filter((m) => m.type === "user");
+    const target = users[users.length - 1];
+    if (!target) return { ok: false, error: "nothing to undo" };
+    try {
+      const res = (await this.q.rewindFiles(target.uuid)) as { canRewind?: boolean; error?: string; filesChanged?: number };
+      return { ok: Boolean(res.canRewind), error: res.error, files: res.filesChanged };
+    } catch (err) {
+      return { ok: false, error: String(err) };
+    }
+  }
+
   close(): void {
+    for (const r of this.pendingConfirm.values()) r(false);
+    this.pendingConfirm.clear();
     this.queue.close();
     this.q?.close?.();
   }
