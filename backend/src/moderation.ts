@@ -29,4 +29,4 @@ export function moderate(text: string): ModerationResult {
 
 /** Replacement shown to the user when a message is filtered. */
 export const FILTERED_NOTICE =
-  "[Svaret blockerades av innehållsfiltret och kan inte visas.]";
+  "[The response was blocked by the content filter and can't be shown.]";

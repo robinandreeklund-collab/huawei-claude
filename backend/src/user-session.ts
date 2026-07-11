@@ -95,7 +95,7 @@ export class UserSession {
   };
 
   private pushSummary(): void {
-    const body = this.lastAssistant.trim().slice(0, 140) || "Svaret är klart.";
+    const body = this.lastAssistant.trim().slice(0, 140) || "The response is ready.";
     notify(this.pushToken, {
       title: `Claude · ${this.contextLabel}`,
       body,

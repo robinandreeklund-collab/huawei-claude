@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="sv">
+<html lang="en">
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
@@ -157,18 +157,18 @@
           <div class="thumb" id="thumb"></div>
         </div>
       </div>
-      <div class="crown upper" id="crown" title="Digital Crown — snurra för att navigera, tryck för att välja"></div>
-      <div class="crown lower" id="crownBack" title="Nedre knapp — tillbaka"></div>
+      <div class="crown upper" id="crown" title="Digital Crown — rotate to navigate, press to select"></div>
+      <div class="crown lower" id="crownBack" title="Lower button — back"></div>
     </div>
 
     <div class="toolbar">
-      <button id="ttsBtn">Uppläsning: på</button>
-      <button id="resetBtn">Starta om</button>
+      <button id="ttsBtn">Read aloud: on</button>
+      <button id="resetBtn">Restart</button>
     </div>
     <p class="caption">
-      Watch Ultimate 2 · Claude-design. Navigera med <b>touch</b> eller <b>kronan</b>
-      (snurra = flytta, tryck = välj; nedre knapp = tillbaka). I webbläsaren:
-      <b>mushjul</b> snurrar, klick på kronan trycker.
+      Watch Ultimate 2 · Claude design. Navigate with <b>touch</b> or the <b>crown</b>
+      (rotate = move, press = select; lower button = back). In the browser:
+      <b>scroll wheel</b> rotates, clicking the crown presses.
     </p>
 
     <script>
@@ -211,12 +211,12 @@
         if (el) el.textContent = String(d.getHours()).padStart(2, "0") + ":" + String(d.getMinutes()).padStart(2, "0"); }, 1000);
 
       document.getElementById("ttsBtn").addEventListener("click", (e) => {
-        ttsOn = !ttsOn; e.target.textContent = "Uppläsning: " + (ttsOn ? "på" : "av"); if (!ttsOn) speechSynthesis.cancel(); });
+        ttsOn = !ttsOn; e.target.textContent = "Read aloud: " + (ttsOn ? "on" : "off"); if (!ttsOn) speechSynthesis.cancel(); });
       document.getElementById("resetBtn").addEventListener("click", () => location.reload());
 
       function speak(text) { if (!ttsOn || !text) return;
         const short = text.split(/(?<=[.!?])\s/)[0].slice(0, 160);
-        const u = new SpeechSynthesisUtterance(short); u.lang = "sv-SE"; speechSynthesis.cancel(); speechSynthesis.speak(u); }
+        const u = new SpeechSynthesisUtterance(short); u.lang = "en-US"; speechSynthesis.cancel(); speechSynthesis.speak(u); }
 
       // --- Top bar ---
       function setTop(mode, title) {
@@ -307,16 +307,16 @@
       // --- Screens ---
       function showPairing() {
         nav.mode = "scroll"; backStack = []; setTop("hidden");
-        view.innerHTML = `<div class="center">${burst(48)}<h2 class="serif">Para ihop</h2>
+        view.innerHTML = `<div class="center">${burst(48)}<h2 class="serif">Pair</h2>
           <div class="qr" id="qr"></div><div class="usercode" id="uc"></div>
-          <p class="small">Skanna med mobilen och godkänn.</p></div>`;
+          <p class="small">Scan with your phone and approve.</p></div>`;
         afterRender();
       }
       function showConsent() {
         nav.mode = "select"; dir = "fade"; setTop("hidden");
-        view.innerHTML = `<div class="center">${burst(42)}<h2 class="serif">Innan vi börjar</h2>
-          <p class="small">Det du säger skickas till backend och Anthropic för att köra Claude Code.</p>
-          <button class="pill" data-focus id="consentBtn">Godkänn &amp; fortsätt</button></div>`;
+        view.innerHTML = `<div class="center">${burst(42)}<h2 class="serif">Before we start</h2>
+          <p class="small">What you say is sent to the backend and Anthropic to run Claude Code.</p>
+          <button class="pill" data-focus id="consentBtn">Agree &amp; continue</button></div>`;
         document.getElementById("consentBtn").onclick = () => ws.send(JSON.stringify({ type: "consent" }));
         registerFocus(); afterRender();
       }
@@ -330,9 +330,9 @@
       function showHome() {
         nav.mode = "select"; backStack = []; setTop("home");
         view.innerHTML = `<div class="wheel deck">
-          ${card({ k: "data-go", v: "chats" }, "chat", "Chats", "dina samtal", true)}
-          ${card({ k: "data-go", v: "projects" }, "folder", "Projects", "dina projekt", true)}
-          ${card({ k: "data-go", v: "code" }, "code", "Claude Code", "kod-sessioner", true)}
+          ${card({ k: "data-go", v: "chats" }, "chat", "Chats", "your conversations", true)}
+          ${card({ k: "data-go", v: "projects" }, "folder", "Projects", "your projects", true)}
+          ${card({ k: "data-go", v: "code" }, "code", "Claude Code", "code sessions", true)}
         </div>`;
         view.querySelectorAll("[data-go]").forEach((el) => el.addEventListener("click", () => openMode(el.dataset.go)));
         registerFocus(); afterRender();
@@ -346,10 +346,10 @@
         setTop("nav", titles[scope] || scope);
         if (!items) { view.innerHTML = `<div class="empty">${esc(statusText || "…")}</div>`; afterRender(); return; }
         let rows = scope === "chats"
-          ? `<div class="card" data-focus id="newChat"><span class="ic">${icon("plus", 24)}</span><span class="tx"><div class="t">Ny chatt</div></span></div>` : "";
+          ? `<div class="card" data-focus id="newChat"><span class="ic">${icon("plus", 24)}</span><span class="tx"><div class="t">New chat</div></span></div>` : "";
         rows += items.length
           ? items.map((it) => card({ k: "data-id", v: encodeURIComponent(it.id) }, ico, it.title, it.subtitle)).join("")
-          : (scope === "chats" ? "" : `<div class="empty">Inget här än</div>`);
+          : (scope === "chats" ? "" : `<div class="empty">Nothing here yet</div>`);
         view.innerHTML = `<div class="wheel">${rows}</div>`;
         const nc = document.getElementById("newChat"); if (nc) nc.onclick = () => ws.send(JSON.stringify({ type: "new_chat" }));
         view.querySelectorAll("[data-id]").forEach((el) => el.addEventListener("click", () => onPick(scope, decodeURIComponent(el.dataset.id))));
@@ -375,7 +375,7 @@
               <button class="cbtn" id="kbd">${icon("kbd", 24)}</button>
             </div>
           </div>
-          <div class="typing" id="typing"><input id="text" placeholder="Skriv till Claude…" /><button id="sendBtn">${icon("chev", 18)}</button></div>`;
+          <div class="typing" id="typing"><input id="text" placeholder="Message Claude…" /><button id="sendBtn">${icon("chev", 18)}</button></div>`;
         backStack = [showHome];
         wireChat(); afterRender();
       }
@@ -427,21 +427,21 @@
         document.getElementById("text").addEventListener("keydown", (e) => { if (e.key === "Enter") { e.stopPropagation(); sendText(); } });
 
         const mic = document.getElementById("mic");
-        if (!meta.stt) { mic.onclick = () => setStatus("Röst ej konfigurerad — använd tangentbordet"); return; }
+        if (!meta.stt) { mic.onclick = () => setStatus("Voice not configured — use the keyboard"); return; }
         const start = async (e) => { e.preventDefault();
           try { const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
             recMime = MediaRecorder.isTypeSupported("audio/webm") ? "audio/webm" : "";
             recorder = new MediaRecorder(stream, recMime ? { mimeType: recMime } : undefined);
             chunks = []; recorder.ondataavailable = (ev) => ev.data.size && chunks.push(ev.data);
-            recorder.onstop = sendAudio; recorder.start(); mic.classList.add("rec"); setStatus("Lyssnar… släpp"); }
-          catch { setStatus("Mikrofon nekad"); } };
+            recorder.onstop = sendAudio; recorder.start(); mic.classList.add("rec"); setStatus("Listening… release"); }
+          catch { setStatus("Mic denied"); } };
         const stop = (e) => { e && e.preventDefault(); mic.classList.remove("rec"); if (recorder && recorder.state !== "inactive") recorder.stop(); };
         mic.addEventListener("pointerdown", start); mic.addEventListener("pointerup", stop); mic.addEventListener("pointerleave", stop);
       }
       async function sendAudio() {
         const blob = new Blob(chunks, { type: recMime || "audio/webm" });
         const buf = new Uint8Array(await blob.arrayBuffer()); let bin = ""; for (const b of buf) bin += String.fromCharCode(b);
-        setStatus("Transkriberar…");
+        setStatus("Transcribing…");
         ws.send(JSON.stringify({ type: "audio_start", mime: recMime || "audio/webm" }));
         ws.send(JSON.stringify({ type: "audio_chunk", data: btoa(bin) }));
         ws.send(JSON.stringify({ type: "audio_end" }));
@@ -481,14 +481,14 @@
           case "list_result": dir = "none"; showList(m.scope, null, m.items); break;
           case "chat_opened": ctx = m.context || "Claude"; dir = "fwd"; showChat(); break;
           case "accepted": showTyping(); break;
-          case "transcribing": setStatus("Transkriberar…"); break;
-          case "transcript": bubble("me", m.text || "(tomt)"); setStatus(""); break;
+          case "transcribing": setStatus("Transcribing…"); break;
+          case "transcript": bubble("me", m.text || "(empty)"); setStatus(""); break;
           case "assistant": hideTyping(); pendingAI += (m.text || "") + " "; bubble("ai", m.text, { report: !m.filtered, filtered: m.filtered }); break;
           case "tool_use": hideTyping(); bubble("tool", m.name); showTyping(); break;
-          case "needs_confirmation": hideTyping(); bubble("ai", "Kräver bekräftelse: " + m.command, { filtered: true }); break;
-          case "turn_done": hideTyping(); setStatus(""); speak(pendingAI.trim()); pendingAI = ""; suggestions(["Fortsätt", "Förklara", "Sammanfatta kort"]); break;
-          case "stt_unavailable": hideTyping(); bubble("ai", "Röst är inte konfigurerad på servern.", { filtered: true }); break;
-          case "error": hideTyping(); bubble("ai", "Fel: " + m.message, { filtered: true }); break;
+          case "needs_confirmation": hideTyping(); bubble("ai", "Needs confirmation: " + m.command, { filtered: true }); break;
+          case "turn_done": hideTyping(); setStatus(""); speak(pendingAI.trim()); pendingAI = ""; suggestions(["Continue", "Explain", "Summarize briefly"]); break;
+          case "stt_unavailable": hideTyping(); bubble("ai", "Voice is not configured on the server.", { filtered: true }); break;
+          case "error": hideTyping(); bubble("ai", "Error: " + m.message, { filtered: true }); break;
         }
       }
       boot();

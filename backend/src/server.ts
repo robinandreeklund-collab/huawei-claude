@@ -77,16 +77,16 @@ async function seedWorkspaceIfEmpty(dir: string): Promise<void> {
   }
 }
 
-/** Compact relative time for list subtitles, e.g. "5 min sedan", "2 dgr sedan". */
+/** Compact relative time for list subtitles, e.g. "5 min ago", "2 d ago". */
 function relTime(ms?: number): string {
   if (!ms) return "";
   const s = Math.max(0, Math.floor((Date.now() - ms) / 1000));
-  if (s < 60) return "nyss";
+  if (s < 60) return "just now";
   const m = Math.floor(s / 60);
-  if (m < 60) return `${m} min sedan`;
+  if (m < 60) return `${m} min ago`;
   const h = Math.floor(m / 60);
-  if (h < 24) return `${h} h sedan`;
-  return `${Math.floor(h / 24)} dgr sedan`;
+  if (h < 24) return `${h} h ago`;
+  return `${Math.floor(h / 24)} d ago`;
 }
 
 // ---------------------------------------------------------------------------
@@ -244,10 +244,10 @@ wss.on("connection", (ws: WebSocket) => {
   };
 
   const guard = (): boolean => {
-    if (!isConnected()) { send({ type: "error", message: "Claude ej ansluten — öppna /connect på telefonen" }); return false; }
+    if (!isConnected()) { send({ type: "error", message: "Claude not connected — open /connect on your phone" }); return false; }
     if (!hasConsent(token)) { send({ type: "needs_consent" }); return false; }
-    if (!allowRequest(token, config.rateLimitPerMin)) { send({ type: "error", message: "rate limit — vänta en stund" }); return false; }
-    if (config.demoMode && isOverBudget(token, config.demoBudgetUsd)) { send({ type: "error", message: "demo-budget slut" }); return false; }
+    if (!allowRequest(token, config.rateLimitPerMin)) { send({ type: "error", message: "rate limit — wait a moment" }); return false; }
+    if (config.demoMode && isOverBudget(token, config.demoBudgetUsd)) { send({ type: "error", message: "demo budget spent" }); return false; }
     return true;
   };
 
@@ -318,7 +318,7 @@ wss.on("connection", (ws: WebSocket) => {
             const sessions = await listSessions({ dir: chatsDir(), limit: 30 }).catch(() => []);
             const items = sessions.map((s) => ({
               id: s.sessionId,
-              title: s.customTitle || s.summary || s.firstPrompt || "Samtal",
+              title: s.customTitle || s.summary || s.firstPrompt || "Conversation",
               subtitle: relTime(s.lastModified),
             }));
             send({ type: "list_result", scope, items });
@@ -326,7 +326,7 @@ wss.on("connection", (ws: WebSocket) => {
             const items = (await listAppProjects()).map((p) => ({
               id: p.id,
               title: p.name,
-              subtitle: "projekt",
+              subtitle: "project",
             }));
             send({ type: "list_result", scope, items });
           } else if (scope === "code") {
@@ -337,7 +337,7 @@ wss.on("connection", (ws: WebSocket) => {
                 return {
                   id: r.id,
                   title: r.title,
-                  subtitle: last[0] ? relTime(last[0].lastModified) : "inget arbete än",
+                  subtitle: last[0] ? relTime(last[0].lastModified) : "no work yet",
                 };
               }),
             );
@@ -353,7 +353,7 @@ wss.on("connection", (ws: WebSocket) => {
 
       case "new_chat":
         us.cwd = chatsDir();
-        us.contextLabel = "Nytt samtal";
+        us.contextLabel = "New chat";
         us.systemPrompt = undefined;
         us.rebuildClaude();
         send({ type: "chat_opened", context: us.contextLabel, kind: "chat" });
@@ -361,7 +361,7 @@ wss.on("connection", (ws: WebSocket) => {
 
       case "open_chat":
         us.cwd = chatsDir();
-        us.contextLabel = "Samtal";
+        us.contextLabel = "Conversation";
         us.systemPrompt = undefined;
         us.rebuildClaude(String(msg.id ?? ""));
         send({ type: "chat_opened", context: us.contextLabel, kind: "chat" });
@@ -369,7 +369,7 @@ wss.on("connection", (ws: WebSocket) => {
 
       case "open_project": {
         const proj = await appProject(String(msg.id ?? ""));
-        if (!proj) return send({ type: "error", message: "ogiltigt projekt" });
+        if (!proj) return send({ type: "error", message: "invalid project" });
         us.cwd = proj.path;
         us.contextLabel = proj.name;
         us.systemPrompt = proj.instructions || undefined;
@@ -381,7 +381,7 @@ wss.on("connection", (ws: WebSocket) => {
 
       case "open_code": {
         const repo = codeRepoPath(String(msg.id ?? ""));
-        if (!repo) return send({ type: "error", message: "ogiltigt repo" });
+        if (!repo) return send({ type: "error", message: "invalid repo" });
         us.cwd = repo;
         us.contextLabel = String(msg.id);
         us.systemPrompt = undefined;
