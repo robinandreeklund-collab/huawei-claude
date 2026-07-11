@@ -93,6 +93,31 @@ async function buzzDone() {
 }
 ```
 
+### Haptik när splashen släpper (appstart)
+
+Klockans laddnings-splash (Claude-sparken + ring-svep) avslutas med en mjuk
+dubbel-tap så starten känns i handleden — samma ögonblick som webb-demon kör
+`navigator.vibrate([18,40,24])`. På enheten görs det med Vibrator Kit:
+
+```ts
+// Anropa när splash-animationen är klar och parningsvyn visas.
+async function buzzStart() {
+  await vibrator.startVibration(
+    { type: 'time', duration: 18 },
+    { id: 0, usage: 'notification' },
+  ).catch(() => {});
+  await vibrator.startVibration(
+    { type: 'time', duration: 24 },
+    { id: 0, usage: 'notification' },
+  ).catch(() => {});   // andra pulsen ~40 ms efter den första
+}
+```
+
+> Webb-demon (`public/watch.html`) använder `navigator.vibrate` som platshållare
+> (no-op på desktop). En riktig dubbelpuls kan även göras med ett anpassat
+> `type: 'time'`-mönster eller en preset-effekt (`haptic.notice.light`) på enheten.
+> Samma `buzz()` triggas också vid `turn_done` (när Claude svarat klart).
+
 ## 5. Lokal avisering i förgrunden (Notification Kit)
 
 När appen körs men användaren är på en annan skärm i appen.

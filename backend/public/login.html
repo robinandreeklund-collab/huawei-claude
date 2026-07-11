@@ -1,9 +1,9 @@
 <!doctype html>
-<html lang="sv">
+<html lang="en">
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Logga in på Claude Code</title>
+    <title>Sign in to Claude Code</title>
     <style>
       :root { color-scheme: light dark; }
       body {
@@ -40,13 +40,13 @@
   </head>
   <body>
     <div class="card">
-      <h1>Logga in på din klocka</h1>
-      <p>Bekräfta att den här klockan får styra din Claude Code-session.</p>
+      <h1>Sign in on your watch</h1>
+      <p>Confirm that this watch may control your Claude Code session.</p>
       <div id="codeBox"></div>
       <input id="code" placeholder="XXXX-XXXX" autocomplete="off" autocapitalize="characters" />
-      <button id="approve">Godkänn klockan</button>
+      <button id="approve">Approve watch</button>
       <p id="status"></p>
-      <small>Prototyp — riktig OAuth-inloggning kommer senare (se specen §6).</small>
+      <small>Prototype — real OAuth sign-in comes later (see spec §6).</small>
     </div>
     <script>
       const params = new URLSearchParams(location.search);
@@ -65,7 +65,7 @@
         const user_code = input.value.trim().toUpperCase();
         if (!user_code) return;
         btn.disabled = true;
-        status.textContent = "Godkänner…";
+        status.textContent = "Approving…";
         try {
           const r = await fetch("/login", {
             method: "POST",
@@ -74,13 +74,13 @@
           });
           const data = await r.json();
           if (data.approved) {
-            status.innerHTML = '<span class="ok">✓ Klockan är godkänd. Du kan lägga bort telefonen.</span>';
+            status.innerHTML = '<span class="ok">✓ Watch approved. You can put your phone away.</span>';
           } else {
-            status.innerHTML = '<span class="err">Koden hittades inte eller har gått ut.</span>';
+            status.innerHTML = '<span class="err">Code not found or expired.</span>';
             btn.disabled = false;
           }
         } catch (e) {
-          status.innerHTML = '<span class="err">Något gick fel: ' + e + "</span>";
+          status.innerHTML = '<span class="err">Something went wrong: ' + e + "</span>";
           btn.disabled = false;
         }
       });

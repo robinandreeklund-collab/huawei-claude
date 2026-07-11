@@ -73,6 +73,10 @@ export class ClaudeSession {
   private queue = new MessageQueue<SDKUserMessage>();
   private q: Query | null = null;
   private started = false;
+  // Incremental moderation of the text currently being streamed, so flagged
+  // content is cut off mid-stream instead of shown and then retracted.
+  private streamBuf = "";
+  private streamBlocked = false;
 
   constructor(
     private readonly emit: Emit,
@@ -110,6 +114,7 @@ export class ClaudeSession {
         ...(this.opts.resume ? { resume: this.opts.resume } : {}),
         ...(this.opts.systemPrompt ? { systemPrompt: this.opts.systemPrompt } : {}),
         env: spawnEnv(), // inject the connected Claude credential (subscription/API key)
+        includePartialMessages: true, // stream assistant text token-by-token to the watch
         permissionMode: "acceptEdits",
         canUseTool: this.canUseTool,
       },
@@ -126,8 +131,42 @@ export class ClaudeSession {
     }
   }
 
+  // Live token stream (SDKPartialAssistantMessage). We forward text deltas so the
+  // watch renders the answer word-by-word, running moderation on the growing text
+  // so a flagged block is stopped before it's fully shown.
+  private forwardStream(message: SDKMessage): void {
+    if (message.type !== "stream_event") return;
+    const ev = message.event as {
+      type: string;
+      content_block?: { type?: string };
+      delta?: { type?: string; text?: string };
+    };
+    if (ev.type === "content_block_start") {
+      if (ev.content_block?.type === "text") {
+        this.streamBuf = "";
+        this.streamBlocked = false;
+        this.emit({ type: "stream_start" });
+      }
+    } else if (ev.type === "content_block_delta") {
+      if (ev.delta?.type === "text_delta" && typeof ev.delta.text === "string") {
+        if (this.streamBlocked) return;
+        this.streamBuf += ev.delta.text;
+        if (moderate(this.streamBuf).flagged) {
+          this.streamBlocked = true;
+          this.emit({ type: "stream_filter" });
+          return;
+        }
+        this.emit({ type: "stream_delta", text: ev.delta.text });
+      }
+    } else if (ev.type === "content_block_stop") {
+      this.emit({ type: "stream_end" });
+    }
+  }
+
   private forward(message: SDKMessage): void {
-    if (message.type === "assistant") {
+    if (message.type === "stream_event") {
+      this.forwardStream(message);
+    } else if (message.type === "assistant") {
       const content = message.message.content;
       if (Array.isArray(content)) {
         for (const block of content) {
@@ -135,9 +174,9 @@ export class ClaudeSession {
             const verdict = moderate(block.text);
             if (verdict.flagged) {
               this.opts.onFiltered?.(verdict.reason ?? "flagged", block.text);
-              this.emit({ type: "assistant", text: FILTERED_NOTICE, filtered: true });
+              this.emit({ type: "assistant", text: FILTERED_NOTICE, filtered: true, streamed: true });
             } else {
-              this.emit({ type: "assistant", text: block.text });
+              this.emit({ type: "assistant", text: block.text, streamed: true });
             }
           } else if (block.type === "tool_use") {
             this.emit({ type: "tool_use", name: block.name, input: block.input });

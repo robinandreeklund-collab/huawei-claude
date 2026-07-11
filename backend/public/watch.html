@@ -467,6 +467,48 @@
       }
       function hideTyping() { const r = document.getElementById("typingRow"); if (r) r.remove(); }
 
+      // --- Live word-by-word streaming of Claude's answer ---
+      // A token stream builds the bubble as it arrives; the final (moderated)
+      // `assistant` event reconciles it (adds the report flag, or swaps to the
+      // filter notice). streamQueue keeps finished stream bubbles awaiting that.
+      let curStream = null; const streamQueue = [];
+      function startStream() {
+        hideTyping(); const feed = document.getElementById("feed"); if (!feed) return;
+        const row = document.createElement("div"); row.className = "mrow in";
+        const b = document.createElement("div"); b.className = "bubble in";
+        const t = document.createElement("div"); t.className = "time"; t.textContent = nowTime();
+        row.appendChild(b); row.appendChild(t); feed.appendChild(row);
+        feed.scrollTop = feed.scrollHeight;
+        curStream = { row, bubble: b, filtered: false };
+      }
+      function appendStream(text) {
+        if (!curStream) startStream();
+        if (curStream.filtered) return;
+        curStream.bubble.textContent += text;
+        const feed = document.getElementById("feed"); if (feed) feed.scrollTop = feed.scrollHeight;
+      }
+      function filterStream() { if (!curStream) startStream(); curStream.filtered = true; curStream.bubble.classList.add("filtered"); curStream.bubble.textContent = "…"; }
+      function endStream() { if (curStream) { streamQueue.push(curStream); curStream = null; } }
+      function reconcileAssistant(m) {
+        const s = streamQueue.shift() || curStream; if (s === curStream) curStream = null;
+        if (!s) { bubble("ai", m.text, { report: !m.filtered, filtered: m.filtered }); pendingAI += (m.text || "") + " "; return; }
+        const b = s.bubble;
+        if (m.filtered) { b.classList.add("filtered"); b.textContent = m.text; }
+        else {
+          b.classList.remove("filtered"); b.textContent = m.text || b.textContent;
+          const flag = document.createElement("span"); flag.className = "flag"; flag.innerHTML = icon("flag");
+          flag.onclick = (ev) => { ws.send(JSON.stringify({ type: "report", text: m.text, reason: "user_report" })); ev.currentTarget.textContent = "✓"; };
+          b.appendChild(flag);
+          pendingAI += (m.text || "") + " ";
+        }
+        const feed = document.getElementById("feed"); if (feed) feed.scrollTop = feed.scrollHeight;
+      }
+
+      // Haptic feedback. On the real watch this is the ArkTS Vibrator Kit (see
+      // docs/ondevice-notifications.md); in the browser demo we use the
+      // Vibration API as a stand-in (no-op on desktop).
+      function buzz(pattern) { try { navigator.vibrate && navigator.vibrate(pattern || 24); } catch {} }
+
       function wireChat() {
         const typing = document.getElementById("typing");
         const openKbd = () => { typing.style.display = typing.style.display === "flex" ? "none" : "flex"; if (typing.style.display === "flex") document.getElementById("text").focus(); };
@@ -508,6 +550,7 @@
         meta = await metaP;
         const dc = await dcP;
         await minSplash;
+        buzz([18, 40, 24]); // gentle double-tap as the splash releases
         dir = "fade"; showPairing();
         deviceCode = dc.device_code;
         document.getElementById("qr").innerHTML = '<img src="' + dc.qr_data_url + '">';
@@ -539,10 +582,14 @@
           case "accepted": showTyping(); break;
           case "transcribing": setStatus("Transcribing…"); break;
           case "transcript": bubble("me", m.text || "(empty)"); setStatus(""); break;
-          case "assistant": hideTyping(); pendingAI += (m.text || "") + " "; bubble("ai", m.text, { report: !m.filtered, filtered: m.filtered }); break;
+          case "stream_start": startStream(); break;
+          case "stream_delta": appendStream(m.text || ""); break;
+          case "stream_filter": filterStream(); break;
+          case "stream_end": endStream(); break;
+          case "assistant": hideTyping(); if (m.streamed) reconcileAssistant(m); else { pendingAI += (m.text || "") + " "; bubble("ai", m.text, { report: !m.filtered, filtered: m.filtered }); } break;
           case "tool_use": hideTyping(); bubble("tool", m.name); showTyping(); break;
           case "needs_confirmation": hideTyping(); bubble("ai", "Needs confirmation: " + m.command, { filtered: true }); break;
-          case "turn_done": hideTyping(); setStatus(""); speak(pendingAI.trim()); pendingAI = ""; suggestions(["Continue", "Explain", "Summarize briefly"]); break;
+          case "turn_done": hideTyping(); setStatus(""); speak(pendingAI.trim()); pendingAI = ""; buzz([16, 40, 22]); suggestions(["Continue", "Explain", "Summarize briefly"]); break;
           case "stt_unavailable": hideTyping(); bubble("ai", "Voice is not configured on the server.", { filtered: true }); break;
           case "error": hideTyping(); bubble("ai", "Error: " + m.message, { filtered: true }); break;
         }

@@ -166,10 +166,10 @@ const server = createServer(async (req, res) => {
   if (path === "/connect" && req.method === "POST") {
     const { token, secret } = await readBody(req);
     if (config.adminSecret && String(secret ?? "") !== config.adminSecret) {
-      return json(res, 403, { error: "fel admin-secret" });
+      return json(res, 403, { error: "wrong admin secret" });
     }
     if (!validToken(String(token ?? ""))) {
-      return json(res, 400, { error: "ogiltig token (förväntar sk-ant-oat… eller sk-ant-api…)" });
+      return json(res, 400, { error: "invalid token (expected sk-ant-oat… or sk-ant-api…)" });
     }
     await setCred(String(token));
     return json(res, 200, { ...credStatus(), adminRequired: Boolean(config.adminSecret) });

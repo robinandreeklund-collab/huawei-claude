@@ -139,9 +139,17 @@ Klient → server:
 { "type": "foreground" }
 ```
 Server → klient: `authed` (`consented`, `demoMode`) · `needs_consent` · `consented` ·
-`accepted` · `assistant` (`text`, ev. `filtered`) · `tool_use` · `needs_confirmation` ·
-`transcribing` · `transcript` · `stt_unavailable` · `reported` · `result` (kostnad) ·
-`turn_done` · `error`.
+`accepted` · `stream_start` / `stream_delta` (`text`) / `stream_end` / `stream_filter`
+(live token-streaming av svaret, ord för ord) · `assistant` (`text`, `streamed`, ev.
+`filtered`; slutgiltig modererad text som avslutar streamen) · `tool_use` ·
+`needs_confirmation` · `transcribing` · `transcript` · `stt_unavailable` · `reported` ·
+`result` (kostnad) · `turn_done` · `error`.
+
+Svaret streamas token-för-token (`includePartialMessages` i Agent SDK). Moderering
+körs på den växande texten så ett flaggat stycke stoppas mitt i streamen
+(`stream_filter`); den avslutande `assistant`-händelsen bär den slutgiltiga
+modererade texten. I bakgrunden (frånkopplad) skickas inte stream-deltan — bara den
+buffrade slutgiltiga texten + en push-notis.
 
 Navigation (tre ytor — Chats / Projects / Claude Code):
 ```json

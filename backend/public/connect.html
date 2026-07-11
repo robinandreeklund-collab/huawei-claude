@@ -1,9 +1,9 @@
 <!doctype html>
-<html lang="sv">
+<html lang="en">
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
-    <title>Anslut Claude</title>
+    <title>Connect Claude</title>
     <style>
       :root {
         --bg: #262624; --surface: #1f1e1d; --surface-2: #30302e;
@@ -91,45 +91,45 @@
                 fill="currentColor" />
         </svg>
         <div>
-          <h1 class="serif">Anslut Claude</h1>
+          <h1 class="serif">Connect Claude</h1>
           <div class="sub">Huawei Watch Ultimate 2 · relay</div>
         </div>
       </div>
 
       <div id="status" class="status">
         <span class="dot"></span>
-        <div class="txt"><b id="stTitle">Kontrollerar…</b><div class="meta" id="stMeta">&nbsp;</div></div>
+        <div class="txt"><b id="stTitle">Checking…</b><div class="meta" id="stMeta">&nbsp;</div></div>
       </div>
 
       <div class="card">
-        <label for="token">Claude-token</label>
+        <label for="token">Claude token</label>
         <input id="token" type="password" autocomplete="off" autocapitalize="off" spellcheck="false"
                placeholder="sk-ant-oat01-…" />
         <div class="hint">
-          Från din Claude Pro/Max-prenumeration via <code>claude setup-token</code> — ingen extra API-kostnad.
-          En <code>sk-ant-api…</code>-nyckel fungerar också (betalar per token).
+          From your Claude Pro/Max subscription via <code>claude setup-token</code> — no extra API cost.
+          An <code>sk-ant-api…</code> key works too (billed per token).
         </div>
 
-        <label for="secret" id="secretLabel" style="display:none">Admin-secret</label>
-        <input id="secret" type="password" autocomplete="off" placeholder="krävs av denna server"
+        <label for="secret" id="secretLabel" style="display:none">Admin secret</label>
+        <input id="secret" type="password" autocomplete="off" placeholder="required by this server"
                style="display:none" />
 
-        <button id="go" class="go">Anslut</button>
+        <button id="go" class="go">Connect</button>
         <div id="msg" class="msg"></div>
       </div>
 
       <details>
-        <summary>Så hämtar du en token</summary>
+        <summary>How to get a token</summary>
         <ol class="steps">
-          <li>På din dator: <code>npm i -g @anthropic-ai/claude-code</code> (om du inte redan har den).</li>
-          <li>Kör <code>claude setup-token</code> och logga in med ditt Claude-konto i webbläsaren.</li>
-          <li>Kopiera <code>sk-ant-oat01-…</code>-token som skrivs ut och klistra in den ovan.</li>
-          <li>Tryck <b>Anslut</b> — den sparas i backend och används av klockan. Giltig ca 1 år.</li>
+          <li>On your computer: <code>npm i -g @anthropic-ai/claude-code</code> (if you don't have it already).</li>
+          <li>Run <code>claude setup-token</code> and sign in with your Claude account in the browser.</li>
+          <li>Copy the <code>sk-ant-oat01-…</code> token that's printed and paste it above.</li>
+          <li>Press <b>Connect</b> — it's stored in the backend and used by the watch. Valid ~1 year.</li>
         </ol>
       </details>
 
       <div class="foot">
-        Token skickas krypterat (HTTPS) och lagras bara på din server, aldrig i appen eller i git.
+        The token is sent encrypted (HTTPS) and stored only on your server — never in the app or in git.
       </div>
     </div>
 
@@ -138,8 +138,8 @@
       const statusEl = $("status");
       let adminRequired = false;
 
-      const KIND = { subscription: "prenumeration", apikey: "API-nyckel" };
-      const SRC = { stored: "inklistrad token", env: "miljövariabel", none: "" };
+      const KIND = { subscription: "subscription", apikey: "API key" };
+      const SRC = { stored: "pasted token", env: "environment variable", none: "" };
 
       async function refresh() {
         try {
@@ -147,16 +147,16 @@
           const s = await r.json();
           if (s.connected) {
             statusEl.className = "status on";
-            $("stTitle").textContent = "Ansluten";
+            $("stTitle").textContent = "Connected";
             $("stMeta").textContent = `${KIND[s.kind] ?? s.kind} · ${SRC[s.source] ?? s.source}`;
           } else {
             statusEl.className = "status off";
-            $("stTitle").textContent = "Inte ansluten";
-            $("stMeta").textContent = "Klistra in en token nedan för att komma igång.";
+            $("stTitle").textContent = "Not connected";
+            $("stMeta").textContent = "Paste a token below to get started.";
           }
         } catch {
           statusEl.className = "status off";
-          $("stTitle").textContent = "Kunde inte nå servern";
+          $("stTitle").textContent = "Couldn't reach the server";
           $("stMeta").textContent = "";
         }
       }
@@ -170,9 +170,9 @@
       async function connect() {
         const token = $("token").value.trim();
         const secret = $("secret").value.trim();
-        if (!token) return showMsg("err", "Klistra in en token först.");
+        if (!token) return showMsg("err", "Paste a token first.");
         $("go").disabled = true;
-        showMsg("", "Ansluter…");
+        showMsg("", "Connecting…");
         $("msg").className = "msg show";
         try {
           const r = await fetch("/connect", {
@@ -182,19 +182,19 @@
           });
           const data = await r.json();
           if (r.ok) {
-            showMsg("ok", "Klart! Claude är ansluten. Du kan stänga sidan och använda klockan.");
+            showMsg("ok", "Done! Claude is connected. You can close this page and use the watch.");
             $("token").value = "";
             adminRequired = Boolean(data.adminRequired);
             refresh();
           } else if (r.status === 403) {
             adminRequired = true;
             revealSecret();
-            showMsg("err", data.error || "Fel admin-secret.");
+            showMsg("err", data.error || "Wrong admin secret.");
           } else {
-            showMsg("err", data.error || "Något gick fel.");
+            showMsg("err", data.error || "Something went wrong.");
           }
         } catch {
-          showMsg("err", "Kunde inte nå servern.");
+          showMsg("err", "Couldn't reach the server.");
         } finally {
           $("go").disabled = false;
         }

@@ -82,8 +82,15 @@ export class UserSession {
   emit = (ev: Event): void => {
     if (ev.type === "assistant" && !ev.filtered) this.lastAssistant += `${ev.text ?? ""} `;
 
+    // Live token-stream events are only useful in real time. When detached we
+    // drop them (the buffered final `assistant` event carries the full text) so
+    // a long streamed answer can't flood the buffer and evict real events.
+    const transient =
+      ev.type === "stream_start" || ev.type === "stream_delta" ||
+      ev.type === "stream_end" || ev.type === "stream_filter";
+
     if (this.live()) this.wsSend(ev);
-    else {
+    else if (!transient) {
       this.buffer.push(ev);
       if (this.buffer.length > MAX_BUFFER) this.buffer.splice(0, this.buffer.length - MAX_BUFFER);
     }
