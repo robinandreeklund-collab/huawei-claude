@@ -10,6 +10,7 @@
         --ink: #f7f6f1; --muted: #b1ada1; --faint: #86837c;
         --clay: #d97757; --clay-deep: #c15f3c; --clay-tint: rgba(217,119,87,.18);
         --border: #3a3936; --on-clay: #2a1a12;
+        --ok: #7bbd8a; --err: #e0806a; /* warm status accents (Claude palette) */
         color-scheme: dark;
       }
       * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
@@ -21,6 +22,11 @@
       .serif { font-family: Copernicus, "Tiempos Text", Georgia, serif; }
       .caption { color: var(--faint); font-size: .78rem; text-align: center; max-width: 24rem; line-height: 1.5; }
       .caption b { color: var(--muted); font-weight: 600; }
+      /* Fit the fixed-size watch onto narrow phone browsers by scaling the whole unit. */
+      @media (max-width: 430px) {
+        body { padding: 1rem 0; }
+        .watch { transform: scale(calc((100vw - 18px) / 396)); transform-origin: top center; margin-bottom: -46px; }
+      }
 
       .watch { position: relative; }
       .bezel {
@@ -37,11 +43,12 @@
         position: relative; touch-action: none; }
       /* Content fills the whole round face; the circle naturally crops the corners. */
       .topbar { position: absolute; top: 0; left: 0; right: 0; height: 58px; z-index: 3;
-        display: flex; align-items: center; justify-content: center; gap: .4rem; padding-top: 20px;
+        display: flex; align-items: center; justify-content: center; gap: .45rem; padding: 20px 70px 0;
         font-size: .66rem; color: var(--muted); letter-spacing: .04em;
         background: linear-gradient(var(--bg) 55%, transparent); pointer-events: none; }
       .navttl { pointer-events: auto; display: inline-flex; align-items: center; gap: .3rem; cursor: pointer;
-        color: var(--ink); font-size: .82rem; }
+        color: var(--ink); font-size: .82rem; min-width: 0; max-width: 8.5rem; }
+      .navttl .cname, .navttl b { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
       .navttl svg { color: var(--muted); }
       .dot { width: .4rem; height: .4rem; border-radius: 50%; background: var(--faint); }
       .dot.on { background: #7bbd8a; }
@@ -96,17 +103,18 @@
         background: var(--surface); padding: .4rem .6rem; border-radius: 12px; display: inline-flex; align-items: center; gap: .4rem; }
       .flag { position: absolute; top: 5px; right: 8px; color: currentColor; opacity: .45; cursor: pointer; display: inline-grid; }
 
-      /* Bottom bar: suggested quick replies + dock */
+      /* Bottom bar: suggested quick replies + dock. Extra bottom padding keeps the
+         round mic/keyboard buttons off the clipped bottom curve. */
       .bottombar { position: absolute; left: 0; right: 0; bottom: 0; z-index: 3; display: flex; flex-direction: column;
-        align-items: center; gap: .5rem; padding-bottom: 20px; background: linear-gradient(transparent, var(--bg) 42%); }
-      .status { font-size: .66rem; color: var(--faint); min-height: .85rem; }
-      .quick { display: flex; gap: .4rem; overflow-x: auto; max-width: 100%; padding: 0 22px; scrollbar-width: none; }
+        align-items: center; gap: .5rem; padding-bottom: 40px; background: linear-gradient(transparent, var(--bg) 42%); }
+      .status { font-size: .68rem; color: var(--muted); min-height: .85rem; }
+      .quick { display: flex; gap: .4rem; overflow-x: auto; max-width: 84%; padding: 0 8px; scrollbar-width: none; justify-content: center; }
       .quick::-webkit-scrollbar { display: none; }
       .chip { flex: 0 0 auto; background: var(--surface-2); border: 1px solid var(--border); color: var(--ink);
         border-radius: 999px; padding: .42rem .85rem; font-size: .78rem; cursor: pointer; white-space: nowrap; }
       .chip:active { background: var(--clay-tint); }
-      /* Compose bar: two big clay circles — mic (left), keyboard (right) */
-      .dock { display: flex; align-items: center; justify-content: center; gap: 2.6rem; }
+      /* Compose bar: two clay circles — mic (left), keyboard (right) */
+      .dock { display: flex; align-items: center; justify-content: center; gap: 2.4rem; }
       .cbtn { width: 60px; height: 60px; border-radius: 50%; border: none; cursor: pointer; color: var(--on-clay);
         background: radial-gradient(circle at 50% 30%, #e88b68, var(--clay-deep)); display: grid; place-items: center;
         box-shadow: 0 6px 18px rgba(193,95,60,.4); transition: transform .08s, box-shadow .15s; touch-action: none; }
@@ -114,8 +122,8 @@
       .cbtn.rec { transform: scale(1.1); box-shadow: 0 0 0 10px var(--clay-tint); }
       /* Compose input sits in the round-safe zone (raised off the curved edge),
          with the mic/keyboard dock hidden while typing so nothing overlaps. */
-      .typing { position: absolute; left: 30px; right: 30px; bottom: 46px; z-index: 6; display: none;
-        align-items: center; gap: .5rem; animation: fadeUp .18s var(--ease); }
+      .typing { position: absolute; left: 0; right: 0; margin-inline: auto; width: min(264px, 84%); bottom: 52px;
+        z-index: 6; display: none; align-items: center; gap: .5rem; animation: fadeUp .18s var(--ease); }
       .typing input { flex: 1; min-width: 0; background: var(--surface-2); border: 1px solid var(--border); color: var(--ink);
         border-radius: 999px; padding: .72rem 1rem; font-size: .9rem; outline: none; transition: border-color .15s; }
       .typing input::placeholder { color: var(--faint); }
@@ -132,14 +140,18 @@
         border-radius: 999px; padding: .42rem .95rem; font-size: .8rem; cursor: pointer; }
 
       /* --- Controls: menu sheet, confirm card, stop, usage, toast --- */
-      .topmenu { position: absolute; right: 30px; top: 15px; background: none; border: none; color: var(--muted);
-        cursor: pointer; padding: 4px; pointer-events: auto; display: grid; place-items: center; }
+      /* Inline in the centered top row so it stays inside the round face (not a
+         clipped corner). pointer-events auto since .topbar disables them. */
+      .topmenu { background: none; border: none; color: var(--muted); cursor: pointer; padding: 4px;
+        pointer-events: auto; display: inline-grid; place-items: center; flex: 0 0 auto; }
       .topmenu:active { color: var(--ink); }
       .plan-on .cname { color: #d9a35f; border-bottom-color: #d9a35f; }
 
       .sheet { position: absolute; inset: 0; z-index: 8; background: rgba(15,14,13,.72);
         backdrop-filter: blur(3px); display: flex; flex-direction: column; align-items: center;
-        justify-content: center; gap: .5rem; padding: 46px 30px; animation: fade .16s ease; }
+        justify-content: safe center; gap: .5rem; padding: 70px 30px; overflow-y: auto; scrollbar-width: none; }
+      .sheet::-webkit-scrollbar { display: none; }
+      .sheet > * { animation: fade .16s ease; flex: 0 0 auto; }
       .sheet .srow { width: 100%; display: flex; align-items: center; gap: .7rem; background: var(--surface-2);
         border: 1px solid var(--border); border-radius: 16px; padding: .7rem .9rem; cursor: pointer;
         color: var(--ink); font-size: .9rem; transition: transform .1s, background .12s; }
@@ -169,12 +181,14 @@
       .usagebar { height: 8px; border-radius: 999px; background: var(--surface-2); overflow: hidden; margin-top: .5rem; }
       .usagebar > i { display: block; height: 100%; background: linear-gradient(90deg, var(--clay), var(--clay-deep)); }
 
-      .toast { position: absolute; left: 22px; right: 22px; bottom: 96px; z-index: 9; text-align: center;
+      .toast { position: absolute; left: 0; right: 0; margin-inline: auto; width: min(250px, 82%); bottom: 100px;
+        z-index: 9; text-align: center;
         background: var(--surface); border: 1px solid var(--border); border-radius: 14px; padding: .6rem .8rem;
         font-size: .82rem; color: var(--ink); animation: fadeUp .22s var(--ease); }
 
       /* --- Watch actions: notification, timer, sensor, context menu --- */
-      .notif { position: absolute; top: 46px; left: 20px; right: 20px; z-index: 12; display: flex; gap: .6rem;
+      .notif { position: absolute; top: 40px; left: 0; right: 0; margin-inline: auto; width: min(250px, 82%);
+        z-index: 12; display: flex; gap: .6rem;
         align-items: center; background: linear-gradient(135deg, #34322f, #262624);
         border: 1px solid var(--border); border-radius: 20px; padding: .7rem .85rem;
         box-shadow: 0 14px 34px rgba(0,0,0,.55); animation: notifIn .42s var(--spring) both; }
@@ -433,8 +447,9 @@
         const sr = screenEl.getBoundingClientRect(), cy = sr.top + sr.height / 2, R = sr.height / 2;
         scroller.querySelectorAll(".card").forEach((c) => {
           const r = c.getBoundingClientRect(), d = Math.min(1, Math.abs(r.top + r.height / 2 - cy) / R);
-          c.style.transform = `scale(${(1 - d * 0.17).toFixed(3)})`;
-          c.style.opacity = (1 - d * 0.55).toFixed(3);
+          c.style.transform = `scale(${(1 - d * 0.15).toFixed(3)})`;
+          c.style.opacity = (1 - d * 0.32).toFixed(3); // keep off-centre rows readable
+
         });
       }
       function updateThumb() {
