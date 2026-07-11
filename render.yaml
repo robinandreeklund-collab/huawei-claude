@@ -30,14 +30,34 @@ services:
       # set the credential (Render prompts for it; never committed):
       - key: ADMIN_SECRET
         sync: false
-      # Optional — persist the connected token across restarts/redeploys by pointing
-      # CRED_FILE at a Render persistent disk mount (otherwise re-paste after a deploy):
-      # - key: CRED_FILE
-      #   value: /data/claude-cred.json
       #
       # Alternatives to the /connect page (either also works, set in the dashboard):
       #   CLAUDE_CODE_OAUTH_TOKEN  — subscription token, same as /connect but via env
       #   ANTHROPIC_API_KEY        — pay-per-token API billing instead of subscription
       #
+      # --- Persistence (survive restart/redeploy) --------------------------------
+      # By default chats/projects/code history and the connected token live in /tmp,
+      # which Render wipes on restart. Attach a persistent disk (see `disk:` below,
+      # needs a paid plan) and point DATA_DIR at it — then history, the token, and
+      # the CLI's session transcripts all persist:
+      # - key: DATA_DIR
+      #   value: /data
+      #
+      # --- Optional SDK tuning (all have sensible defaults) ----------------------
+      #   CHAT_MODEL / CODE_MODEL / PROJECT_MODEL  — model per surface (chat=Haiku)
+      #   CHAT_EFFORT / CODE_EFFORT                — reasoning effort: low|medium|high
+      #   FALLBACK_MODEL                           — tried if primary is overloaded
+      #   PROMPT_SUGGESTIONS / AGENT_PROGRESS      — on by default
+      #   SANDBOX=true                             — isolate command execution
+      #   DISALLOWED_TOOLS=WebFetch,...            — remove tools entirely
+      #   MCP_CONFIG={"github":{...}}              — connect MCP servers (GitHub, …)
+      #
       # Optional voice (Swedish STT): set STT_API_URL + STT_API_KEY in the dashboard
       # (any OpenAI-compatible /audio/transcriptions endpoint).
+    #
+    # Persistent disk — uncomment (and set DATA_DIR=/data above) on a paid plan so
+    # conversation history and the connected token survive restarts:
+    # disk:
+    #   name: data
+    #   mountPath: /data
+    #   sizeGB: 1

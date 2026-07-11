@@ -106,10 +106,24 @@ svarar servern `stt_unavailable` och klienten faller tillbaka på textinmatning.
 | `CHATS_DIR` | `/tmp/chats` | Neutral katalog för fristående Chats |
 | `PROJECTS_DIR` | `/tmp/projects` | Projekt (varje underkatalog = ett projekt) |
 | `CODE_DIR` | `/tmp/code` | Claude Code-repos (varje underkatalog = ett repo) |
-| `CLAUDE_MODEL` | *(SDK-default)* | Ev. modellöverstyrning |
+| `CLAUDE_MODEL` | *(SDK-default)* | Global modellöverstyrning (vinner över per-yta) |
+| `CHAT_MODEL` | `claude-haiku-4-5` | Modell för Chats (snabb/glanceable) |
+| `PROJECT_MODEL` / `CODE_MODEL` | *(default)* | Modell för Projekt / Claude Code |
+| `CHAT_EFFORT` / `PROJECT_EFFORT` / `CODE_EFFORT` | — | Reasoning-effort per yta: `low`/`medium`/`high` |
+| `FALLBACK_MODEL` | — | Modell(er) om primär är överbelastad (komma-sep.) |
+| `MAX_TURNS` | `0` | Hård turgräns (0 = av) |
+| `TASK_BUDGET_TOKENS` | `0` | API-token-budget så modellen pacar sig (0 = av) |
+| `PROMPT_SUGGESTIONS` | `true` | Modellförslag som quick-replies |
+| `AGENT_PROGRESS` | `true` | Progress-summeringar (statusrad + push-text) |
+| `WATCH_GUIDANCE` | `true` | SessionStart-hook: korta, glanceable svar |
+| `DATA_DIR` | — | Persistent bas för historik/token (överlever omstart) |
+| `DISALLOWED_TOOLS` | — | Verktyg att ta bort helt (komma-sep.) |
+| `SANDBOX` | `false` | Isolerad kommandokörning (bubblewrap) |
+| `CHECKPOINTING` | `true` | Fil-checkpoints → `Undo last change` |
+| `MCP_CONFIG` | — | MCP-servrar som JSON (GitHub m.m.) |
 | `CLAUDE_CODE_OAUTH_TOKEN` | — | Prenumerations-token (alternativ till `/connect`) |
 | `ANTHROPIC_API_KEY` | — | API-nyckel (alternativ till `/connect`) |
-| `CRED_FILE` | `/tmp/claude-cred.json` | Var `/connect`-token lagras |
+| `CRED_FILE` | `…/claude-cred.json` | Var `/connect`-token lagras |
 | `ADMIN_SECRET` | — | Skyddar `/connect` (tomt = öppet) |
 | `DEMO_MODE` | `false` | Isolerat sandbox-läge (seedat repo, caps) |
 | `DEMO_BUDGET_USD` | `1.0` | Kostnadstak per session i demo-läge |
@@ -137,13 +151,22 @@ Klient → server:
 { "type": "register_push", "pushToken": "<Huawei Push Kit device token>" }
 { "type": "background" }
 { "type": "foreground" }
+{ "type": "stop" }                       // avbryt pågående tur (interrupt)
+{ "type": "confirm", "id": "c1", "allow": true }   // svar på needs_confirmation
+{ "type": "plan_mode", "on": true }      // planera utan att köra (read-only)
+{ "type": "set_model", "model": "claude-sonnet-5" }
+{ "type": "usage" }                      // begär kontext-användning
+{ "type": "rewind" }                     // ångra senaste ändring (checkpointing)
 ```
-Server → klient: `authed` (`consented`, `demoMode`) · `needs_consent` · `consented` ·
-`accepted` · `stream_start` / `stream_delta` (`text`) / `stream_end` / `stream_filter`
-(live token-streaming av svaret, ord för ord) · `assistant` (`text`, `streamed`, ev.
-`filtered`; slutgiltig modererad text som avslutar streamen) · `tool_use` ·
-`needs_confirmation` · `transcribing` · `transcript` · `stt_unavailable` · `reported` ·
-`result` (kostnad) · `turn_done` · `error`.
+Server → klient: `authed` (`consented`, `demoMode`, `planMode`) · `needs_consent` ·
+`consented` · `accepted` · `stream_start` / `stream_delta` (`text`) / `stream_end` /
+`stream_filter` (live token-streaming, ord för ord) · `assistant` (`text`, `streamed`,
+ev. `filtered`) · `tool_use` · `progress` (`text`; live summering) · `suggestion`
+(`text`; modellens nästa-prompt) · `needs_confirmation` (`id`, `tool`, `command`) ·
+`history` (`items[{role,text}]`; historik-replay) · `stopped` · `plan_mode` (`on`) ·
+`model_set` · `usage_result` (`usage`) · `rewind_result` (`ok`, `files`) ·
+`transcribing` · `transcript` · `stt_unavailable` · `reported` · `result` (kostnad) ·
+`turn_done` · `error`.
 
 Svaret streamas token-för-token (`includePartialMessages` i Agent SDK). Moderering
 körs på den växande texten så ett flaggat stycke stoppas mitt i streamen
@@ -169,6 +192,28 @@ verktygstillgång.
 HTTP-compliance: `POST /report` (med token), `DELETE /account` (med token),
 `GET /meta` (`{ demoMode, stt, push, claude }`). Anslutning: `GET /connect`,
 `GET /connect/status`, `POST /connect` (se **Anslut Claude** ovan).
+
+## SDK-funktioner (nivå 1–3)
+
+Byggt enligt [`../docs/sdk-analys.md`](../docs/sdk-analys.md):
+
+- **Modellförslag** — `promptSuggestions` → riktiga nästa-prompt-chip.
+- **Modell per yta** — Chats kör snabb Haiku, Code/Projekt ärver default
+  (`CHAT_MODEL`/`CODE_MODEL`, `*_EFFORT`).
+- **Robusthet** — `fallbackModel`, `maxBudgetUsd` (demo), `maxTurns`, `taskBudget`.
+- **Historik-replay** — `getSessionMessages` renderar tidigare bubblor när man
+  öppnar en session (inte tom matning).
+- **Stopp** — `interrupt()` avbryter en pågående tur (Stopp-knapp).
+- **Progress** — `agentProgressSummaries` → statusrad + bättre push-notistext.
+- **Bekräftelse-loop** — `canUseTool` väntar på telefonens Allow/Deny (spec §7).
+- **Plan-läge** — `permissionMode:'plan'`, togglas i åtgärdsmenyn.
+- **Kontextmätare** — `getContextUsage()` i menyn.
+- **CLAUDE.md** — `settingSources:['project']` i Code-läget.
+- **MCP** — `MCP_CONFIG` → GitHub m.fl. som verktyg.
+- **Persistens** — `DATA_DIR` (+ `CLAUDE_CONFIG_DIR`) överlever omstart.
+- **Härdning** — `SANDBOX`, `DISALLOWED_TOOLS`.
+- **Ångra** — `enableFileCheckpointing` + `rewindFiles()` (Undo last change).
+- **Watch-hook** — SessionStart-hook håller svaren korta/glanceable.
 
 ## Deploya till Google Cloud Run
 

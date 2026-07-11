@@ -50,8 +50,11 @@ lagras bara i din backend, aldrig i appen eller i git.
 ## Status
 
 Körbar relay-backend som driver Claude Code via Claude Agent SDK, med
-QR-inloggning (device-flow), WebSocket-streaming, **röst/STT-pipeline** och en
-**round-watch GUI-demo** i webbläsaren. Backend är härdad mot AppGallery-kraven
+QR-inloggning (device-flow), WebSocket-streaming (ord-för-ord), **röst/STT-pipeline**
+och en **round-watch GUI-demo** i webbläsaren. Djup SDK-integration (se
+[`docs/sdk-analys.md`](docs/sdk-analys.md)): modellförslag, modell per läge,
+historik-replay, stopp/avbryt, plan-läge + bekräftelse-loop, progress-notiser,
+kontextmätare, MCP, persistens och ångra. Backend är härdad mot AppGallery-kraven
 (demo-läge, innehållsmoderering, samtycke, rapport, kontoradering). Testbar i
 webbläsaren — ingen klocka behövs ännu. Nästa steg: fas 4 (ArkTS-klockappen)
 när utvecklarkontot är verifierat.

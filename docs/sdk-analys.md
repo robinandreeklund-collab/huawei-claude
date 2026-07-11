@@ -4,6 +4,10 @@ Genomgång av `@anthropic-ai/claude-agent-sdk` (v0.3.x) mot vår watch-relay, f�
 se vad vi kan lägga till och optimera. **Ingen kod här** — bara analys, värde och
 prioritering. Källa: SDK:ns egna typdefinitioner (`sdk.d.ts`) + runtime-API:t (`Query`).
 
+> **Status:** nivå 1–3 nedan är **implementerade** (se `backend/README.md` →
+> "SDK-funktioner"). MCP, sandbox och persistent disk är inkopplade men avstängda
+> tills man sätter respektive env-var/creds.
+
 ---
 
 ## 1. Vad vi redan använder
