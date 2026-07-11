@@ -217,10 +217,12 @@ const server = createServer(async (req, res) => {
   }
 
   // --- Clients -----------------------------------------------------------
-  if (path === "/watch") {
+  // Root shows the round-watch GUI demo — that's the showcase ("så här kommer
+  // det se ut"). The plain developer test client lives at /test.
+  if (path === "/" || path === "/watch") {
     return serveFile(res, "watch.html", "text/html; charset=utf-8");
   }
-  if (path === "/" || path === "/test") {
+  if (path === "/test") {
     return serveFile(res, "test-client.html", "text/html; charset=utf-8");
   }
 
