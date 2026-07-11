@@ -17,11 +17,19 @@ RUN npm ci --include=dev
 COPY tsconfig.json ./
 COPY src ./src
 COPY public ./public
-RUN npm run build
+RUN npm run build \
+  # Drop devDependencies from the runtime image (smaller, less attack surface).
+  && npm prune --omit=dev
 
 ENV NODE_ENV=production
 ENV PORT=8080
 ENV WORKSPACE_DIR=/tmp/workspace
 EXPOSE 8080
+
+# Run as the unprivileged built-in `node` user (uid 1000), not root. The app and
+# Claude Code's tools only write under /tmp (and any mounted DATA_DIR), which the
+# node user can write to.
+RUN chown -R node:node /app
+USER node
 
 CMD ["node", "dist/server.js"]

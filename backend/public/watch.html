@@ -412,9 +412,10 @@
         ttsOn = !ttsOn; e.target.textContent = "Read aloud: " + (ttsOn ? "on" : "off"); if (!ttsOn) speechSynthesis.cancel(); });
       document.getElementById("resetBtn").addEventListener("click", () => location.reload());
 
+      const TTS_LANG = { svenska: "sv-SE", english: "en-US" };
       function speak(text) { if (!ttsOn || !text) return;
         const short = text.split(/(?<=[.!?])\s/)[0].slice(0, 160);
-        const u = new SpeechSynthesisUtterance(short); u.lang = "en-US"; speechSynthesis.cancel(); speechSynthesis.speak(u); }
+        const u = new SpeechSynthesisUtterance(short); u.lang = TTS_LANG[lang] || "en-US"; speechSynthesis.cancel(); speechSynthesis.speak(u); }
 
       // --- Top bar ---
       function setTop(mode, title) {

@@ -160,7 +160,14 @@ export const mcpConfigured = (): boolean => Object.keys(mcpServers()).length > 0
 export function buildSettings(language?: string): Record<string, unknown> {
   const s: Record<string, unknown> = {};
   if (config.forceSubscription) s.forceLoginMethod = "claudeai";
-  if (config.denyRules.length) s.permissions = { deny: config.denyRules };
+  // Always deny the agent from reading the stored Claude credential (prevents a
+  // prompt / prompt-injection from exfiltrating the token), plus any operator rules.
+  const deny = [
+    `Read(${config.credFile})`,
+    "Read(**/claude-cred.json)",
+    ...config.denyRules,
+  ];
+  s.permissions = { deny };
   s.includeCoAuthoredBy = config.coAuthored;
   const lang = language || config.language;
   if (lang) s.language = lang;
