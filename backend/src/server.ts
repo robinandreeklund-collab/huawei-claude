@@ -197,6 +197,13 @@ const server = createServer(async (req, res) => {
     const account = await probeAccount();
     return json(res, 200, { connected: isConnected(), account });
   }
+  // QR that opens the /connect page on the phone (shown on the watch when Claude
+  // isn't connected yet — the second login step after device pairing).
+  if (path === "/connect/qr" && req.method === "GET") {
+    const url = `${baseUrl(req)}/connect`;
+    const qrDataUrl = await QRCode.toDataURL(url, { margin: 1, width: 320 });
+    return json(res, 200, { url, qr_data_url: qrDataUrl });
+  }
   if (path === "/connect" && req.method === "POST") {
     const { token, secret } = await readBody(req);
     if (config.adminSecret && String(secret ?? "") !== config.adminSecret) {

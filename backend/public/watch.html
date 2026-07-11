@@ -112,12 +112,17 @@
         box-shadow: 0 6px 18px rgba(193,95,60,.4); transition: transform .08s, box-shadow .15s; touch-action: none; }
       .cbtn:active { transform: scale(.96); }
       .cbtn.rec { transform: scale(1.1); box-shadow: 0 0 0 10px var(--clay-tint); }
-      .typing { position: absolute; left: 16px; right: 16px; bottom: 18px; z-index: 5; display: none; gap: .4rem; }
-      .typing input { flex: 1; min-width: 0; background: var(--surface); border: 1px solid var(--border); color: var(--ink);
-        border-radius: 999px; padding: .55rem .8rem; font-size: .85rem; }
+      /* Compose input sits in the round-safe zone (raised off the curved edge),
+         with the mic/keyboard dock hidden while typing so nothing overlaps. */
+      .typing { position: absolute; left: 30px; right: 30px; bottom: 46px; z-index: 6; display: none;
+        align-items: center; gap: .5rem; animation: fadeUp .18s var(--ease); }
+      .typing input { flex: 1; min-width: 0; background: var(--surface-2); border: 1px solid var(--border); color: var(--ink);
+        border-radius: 999px; padding: .72rem 1rem; font-size: .9rem; outline: none; transition: border-color .15s; }
       .typing input::placeholder { color: var(--faint); }
-      .typing button { border: none; background: var(--clay); color: var(--on-clay); border-radius: 999px;
-        padding: 0 .95rem; font-weight: 700; cursor: pointer; }
+      .typing input:focus { border-color: var(--clay); }
+      .typing button { border: none; background: var(--clay); color: var(--on-clay); border-radius: 50%;
+        width: 42px; height: 42px; flex: 0 0 auto; display: grid; place-items: center; cursor: pointer; }
+      .typing button:active { background: var(--clay-deep); }
 
       pre.code { position: absolute; inset: 0; margin: 0; overflow: auto; padding: 62px 22px 40px;
         font-family: ui-monospace, monospace; font-size: .72rem; line-height: 1.5; color: #d8d4ca; white-space: pre; }
@@ -381,6 +386,7 @@
       const topbar = document.getElementById("topbar");
       let meta = { demoMode: false, stt: false };
       let deviceCode = null, token = null, ws = null, pollTimer = null;
+      let claudeConnected = false, connectTimer = null;
       let ttsOn = true, recorder = null, chunks = [], recMime = "audio/webm";
       let pendingAI = "", ctx = "Claude", curKind = "chat", planOn = false, notifOn = true, lang = "";
       const nav = { mode: "select", focusables: [], idx: 0, scrollEl: null };
@@ -516,6 +522,35 @@
         document.getElementById("consentBtn").onclick = () => ws.send(JSON.stringify({ type: "consent" }));
         registerFocus(); afterRender();
       }
+
+      // Second login step: the device QR paired the watch; this connects Claude.
+      // Shown when the backend has no Claude credential yet. Scan → opens /connect.
+      async function showConnectClaude() {
+        nav.mode = "scroll"; dir = "fade"; setTop("hidden"); backStack = [];
+        view.innerHTML = `<div class="center" style="padding:0 34px">${burst(40)}
+          <h2 class="serif">Connect Claude</h2>
+          <div class="qr" id="ccqr"></div>
+          <p class="small">Scan to open <b id="ccurl">/connect</b> on your phone and paste your Claude token once.</p></div>`;
+        afterRender();
+        try {
+          const d = await (await fetch("/connect/qr")).json();
+          const img = document.getElementById("ccqr"); if (img) img.innerHTML = '<img src="' + d.qr_data_url + '">';
+          const u = document.getElementById("ccurl"); if (u) u.textContent = (d.url || "/connect").replace(/^https?:\/\//, "");
+        } catch { /* offline */ }
+        startConnectPoll();
+      }
+      function startConnectPoll() {
+        clearInterval(connectTimer);
+        connectTimer = setInterval(async () => {
+          try {
+            const s = await (await fetch("/connect/status")).json();
+            if (s.connected) { clearInterval(connectTimer); claudeConnected = true; buzz([18, 40, 24]); dir = "fade"; showHome(); }
+          } catch { /* keep polling */ }
+        }, 3000);
+      }
+      function stopConnectPoll() { clearInterval(connectTimer); connectTimer = null; }
+      // Decide where to land after auth/consent based on Claude connection state.
+      function afterConsent() { stopConnectPoll(); if (!claudeConnected) showConnectClaude(); else { dir = "fade"; showHome(); } }
 
       function card(go, ico, title, sub, big) {
         return `<div class="card" data-focus ${go.k}="${go.v}">
@@ -893,10 +928,16 @@
 
       function wireChat() {
         const typing = document.getElementById("typing");
-        const openKbd = () => { typing.style.display = typing.style.display === "flex" ? "none" : "flex"; if (typing.style.display === "flex") document.getElementById("text").focus(); };
+        const dock = view.querySelector(".dock");
+        const setTyping = (show) => {
+          typing.style.display = show ? "flex" : "none";
+          if (dock) dock.style.visibility = show ? "hidden" : "visible";
+          if (show) document.getElementById("text").focus();
+        };
+        const openKbd = () => setTyping(typing.style.display !== "flex");
         document.getElementById("kbd").onclick = openKbd;
         const sendText = () => { const t = document.getElementById("text").value.trim(); if (!t) return;
-          sendPrompt(t); document.getElementById("text").value = ""; typing.style.display = "none"; };
+          sendPrompt(t); document.getElementById("text").value = ""; setTyping(false); };
         document.getElementById("sendBtn").onclick = sendText;
         document.getElementById("text").addEventListener("keydown", (e) => { if (e.key === "Enter") { e.stopPropagation(); sendText(); } });
 
@@ -956,8 +997,8 @@
       }
       function handle(m) {
         switch (m.type) {
-          case "authed": planOn = Boolean(m.planMode); if (m.consented) { dir = "fade"; showHome(); } else showConsent(); break;
-          case "consented": dir = "fade"; showHome(); break;
+          case "authed": planOn = Boolean(m.planMode); claudeConnected = Boolean(m.claude); if (!m.consented) showConsent(); else afterConsent(); break;
+          case "consented": afterConsent(); break;
           case "needs_consent": showConsent(); break;
           case "list_result": dir = "none"; showList(m.scope, null, m.items); break;
           case "chat_opened": ctx = m.context || "Claude"; curKind = m.kind || "chat"; dir = "fwd"; showChat(); break;
@@ -1000,7 +1041,9 @@
           case "notifications_set": break;
           case "stt_unavailable": hideTyping(); setRunning(false); bubble("ai", "Voice is not configured on the server.", { filtered: true }); break;
           case "error":
-            hideTyping(); setRunning(false); bubble("ai", "Error: " + m.message, { filtered: true });
+            hideTyping(); setRunning(false);
+            if (/not connected/i.test(String(m.message))) { claudeConnected = false; showConnectClaude(); break; }
+            bubble("ai", "Error: " + m.message, { filtered: true });
             if (/oauth|401|unauthor|invalid api key|credit balance|authentication|expired/i.test(String(m.message))) { showNotif("Reconnect Claude", "Open /connect on your phone"); }
             break;
         }
