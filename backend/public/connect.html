@@ -236,13 +236,14 @@
         } catch { $("token").focus(); showMsg("err", "Couldn't read the clipboard — long-press the field and paste."); }
       }
 
-      // As soon as a valid-looking token is present, connect automatically.
-      let autoTimer = null;
+      // As soon as a NEW valid-looking token is present, connect automatically —
+      // but never auto-retry the same token (a failed one would otherwise loop).
+      let autoTimer = null, lastTried = "";
       function onTokenInput() {
         const t = $("token").value.trim();
         $("go").disabled = !t || busy;
         clearTimeout(autoTimer);
-        if (looksLikeToken(t) && !busy && !adminRequired) autoTimer = setTimeout(connect, 250);
+        if (looksLikeToken(t) && !busy && !adminRequired && t !== lastTried) autoTimer = setTimeout(connect, 250);
       }
 
       async function connect() {
@@ -250,6 +251,7 @@
         const token = $("token").value.trim();
         const secret = $("secret").value.trim();
         if (!token) return showMsg("err", "Paste your token first.");
+        lastTried = token; // don't auto-retry this exact value
         busy = true; $("go").disabled = true;
         showMsg("", '<span class="spin"></span>Connecting…');
         try {

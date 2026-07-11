@@ -73,7 +73,7 @@ export async function probeAccount(force = false): Promise<unknown> {
     // accountInfo() control request can be answered (without it, accountInfo hangs).
     const drain = (async () => { try { for await (const _ of q as AsyncIterable<unknown>) { /* discard */ } } catch { /* closed */ } })();
     const info = await Promise.race([
-      q.accountInfo?.() ?? Promise.resolve(null),
+      (q.accountInfo?.() ?? Promise.resolve(null)).catch(() => null), // no late unhandled rejection
       new Promise((resolve) => setTimeout(() => resolve(null), 15000)),
     ]);
     cachedAccount = info ?? null;

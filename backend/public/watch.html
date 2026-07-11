@@ -419,10 +419,11 @@
 
       // --- Top bar ---
       function setTop(mode, title) {
-        const clock = `<span class="dot ${ws && ws.readyState === 1 ? "on" : ""}"></span><span id="clock">--:--</span>${meta.demoMode ? " · DEMO" : ""}`;
+        const dot = `<span class="dot ${ws && ws.readyState === 1 ? "on" : ""}"></span>`;
+        const clock = `${dot}<span id="clock">--:--</span>${meta.demoMode ? " · DEMO" : ""}`;
         if (mode === "home") topbar.innerHTML = clock + `<button class="topmenu" id="homeGear">${icon("gear", 20)}</button>`;
-        else if (mode === "nav") topbar.innerHTML = `<span class="navttl">${icon("back", 17)}${esc(title)}</span>`;
-        else if (mode === "chat") topbar.innerHTML = `<span class="navttl">${icon("back", 17)}<b class="cname">${esc(title)}</b></span><button class="topmenu" id="chatMenu">${icon("menu", 20)}</button>`;
+        else if (mode === "nav") topbar.innerHTML = `${dot}<span class="navttl">${icon("back", 17)}${esc(title)}</span>`;
+        else if (mode === "chat") topbar.innerHTML = `${dot}<span class="navttl">${icon("back", 17)}<b class="cname">${esc(title)}</b></span><button class="topmenu" id="chatMenu">${icon("menu", 20)}</button>`;
         else topbar.innerHTML = "";
         const b = topbar.querySelector(".navttl"); if (b) b.onclick = () => back();
         const mn = document.getElementById("chatMenu"); if (mn) mn.onclick = () => showMenu();
