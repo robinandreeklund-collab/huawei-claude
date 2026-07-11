@@ -17,8 +17,7 @@ webbläsaren idag — ingen klocka behövs ännu.
 | HTTP + WSS-server (en port, Cloud Run-vänlig) | `src/server.ts` | ✅ |
 | Claude Code-drivning (streamande, multi-turn) | `src/claude-session.ts` | ✅ verifierat |
 | Mobilens inloggningssida | `public/login.html` | ✅ |
-| Browser-testklient (QR → prompt → svar) | `public/test-client.html` | ✅ |
-| **Round-watch GUI-demo** (QR → samtycke → röst/text → svar) | `public/watch.html` | ✅ verifierat |
+| **Klient = round-watch GUI** (enda klienten; QR → samtycke → röst/text → svar) | `public/watch.html` | ✅ verifierat |
 | Verktygsgrind (blockerar `git push` m.m.) | `src/claude-session.ts` | ✅ (prototypnivå, spec §7) |
 | **Demo-/sandbox-läge** (isolerat repo, budget-tak, rate limit) | `src/config.ts` + `src/server.ts` | ✅ verifierat |
 | **Innehållsmoderering** (filter-hook på svar) | `src/moderation.ts` | ✅ (pluggbar, compliance R1) |
@@ -40,14 +39,14 @@ behöver alltså **ingen** miljövariabel för att starta. Alternativt plockar A
 SDK upp `CLAUDE_CODE_OAUTH_TOKEN` eller `ANTHROPIC_API_KEY` från miljön om de är
 satta.
 
-Två klienter:
-- **http://localhost:8080/** — enkel testklient (QR → prompt → svar).
-- **http://localhost:8080/watch** — round-watch GUI-demo (Watch Ultimate 2-mockup):
-  QR-parning på klockskärmen → samtycke → håll mic-knappen och tala (eller skriv)
-  → streamat svar + uppläsning. Så här ser klock-UX:en ut innan vi bygger ArkTS-appen.
+En enda klient — **round-watch GUI:t** (Watch Ultimate 2-mockup). Det är
+utgångspunkten: allt vi testar ser exakt ut som klockan kommer göra. Öppna
+valfri av **http://localhost:8080/**, **/watch** eller **/test** — alla serverar
+samma klock-GUI. QR-parning på klockskärmen → samtycke → håll mic-knappen och
+tala (eller skriv) → streamat svar + uppläsning.
 
-Flöde i båda: skanna QR med mobilen (eller öppna länken) → godkänn → klienten
-plockar upp token, kopplar upp WSS och driver Claude Code.
+Flöde: skanna QR med mobilen (eller öppna länken) → godkänn → klienten plockar
+upp token, kopplar upp WSS och driver Claude Code.
 
 ## Anslut Claude (klistra in din prenumerations-token en gång)
 

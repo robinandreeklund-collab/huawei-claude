@@ -216,14 +216,11 @@ const server = createServer(async (req, res) => {
     return json(res, 200, { deleted: existed });
   }
 
-  // --- Clients -----------------------------------------------------------
-  // Root shows the round-watch GUI demo — that's the showcase ("så här kommer
-  // det se ut"). The plain developer test client lives at /test.
-  if (path === "/" || path === "/watch") {
+  // --- Client ------------------------------------------------------------
+  // There is one client: the round-watch GUI. Every entry point serves it so
+  // that testing always looks exactly like the watch. (/test kept as an alias.)
+  if (path === "/" || path === "/watch" || path === "/test") {
     return serveFile(res, "watch.html", "text/html; charset=utf-8");
-  }
-  if (path === "/test") {
-    return serveFile(res, "test-client.html", "text/html; charset=utf-8");
   }
 
   res.writeHead(404).end("not found");
