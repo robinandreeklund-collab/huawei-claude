@@ -21,17 +21,17 @@
         padding: env(safe-area-inset-top) 1.1rem calc(env(safe-area-inset-bottom) + 2rem);
         -webkit-font-smoothing: antialiased;
       }
-      .wrap { width: 100%; max-width: 27rem; padding-top: 2.4rem; }
+      .wrap { width: 100%; max-width: 27rem; padding-top: 2.2rem; }
       .serif { font-family: Copernicus, "Tiempos Text", Georgia, serif; }
 
-      .brand { display: flex; align-items: center; gap: .6rem; margin-bottom: 1.7rem; }
+      .brand { display: flex; align-items: center; gap: .6rem; margin-bottom: 1.4rem; }
       .spark { color: var(--clay); flex: 0 0 auto; }
       .brand h1 { font-size: 1.5rem; font-weight: 500; margin: 0; letter-spacing: -.01em; }
       .brand .sub { color: var(--faint); font-size: .82rem; margin-top: .1rem; }
 
       .status {
         display: flex; align-items: center; gap: .7rem; padding: .9rem 1rem; border-radius: 16px;
-        background: var(--surface); border: 1px solid var(--border); margin-bottom: 1.5rem;
+        background: var(--surface); border: 1px solid var(--border); margin-bottom: 1.3rem;
       }
       .status .dot { width: .7rem; height: .7rem; border-radius: 50%; background: var(--faint); flex: 0 0 auto;
         box-shadow: 0 0 0 4px transparent; transition: box-shadow .3s, background .3s; }
@@ -39,56 +39,77 @@
       .status.off .dot { background: var(--err); box-shadow: 0 0 0 4px rgba(224,128,106,.14); }
       .status .txt { flex: 1; min-width: 0; }
       .status .txt b { font-weight: 600; font-size: .96rem; }
-      .status .txt .meta { color: var(--faint); font-size: .78rem; margin-top: .12rem; }
+      .status .txt .meta { color: var(--faint); font-size: .78rem; margin-top: .12rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
-      .card { background: var(--surface); border: 1px solid var(--border); border-radius: 20px; padding: 1.3rem 1.2rem; }
-      label { display: block; font-size: .8rem; color: var(--muted); margin: 0 0 .45rem .1rem; }
-      label:not(:first-child) { margin-top: 1.1rem; }
-      input {
-        width: 100%; background: var(--bg); border: 1px solid var(--border); color: var(--ink);
-        border-radius: 13px; padding: .8rem .85rem; font-size: .95rem; font-family: ui-monospace, "SF Mono", Menlo, monospace;
-        outline: none; transition: border-color .15s, box-shadow .15s;
-      }
-      input::placeholder { color: var(--faint); font-family: inherit; }
-      input:focus { border-color: var(--clay); box-shadow: 0 0 0 3px var(--clay-tint); }
-      .hint { font-size: .74rem; color: var(--faint); margin: .5rem .1rem 0; line-height: 1.5; }
+      /* Guided steps */
+      .step { position: relative; background: var(--surface); border: 1px solid var(--border);
+        border-radius: 18px; padding: 1.1rem 1.1rem 1.1rem 3.1rem; margin-bottom: .8rem; }
+      .step .n { position: absolute; left: 1rem; top: 1rem; width: 1.6rem; height: 1.6rem; border-radius: 50%;
+        background: var(--clay-tint); color: var(--clay); font-size: .82rem; font-weight: 700; display: grid; place-items: center; }
+      .step h2 { font-size: .98rem; font-weight: 600; margin: 0 0 .5rem; }
+      .step p { font-size: .82rem; color: var(--muted); margin: 0; line-height: 1.5; }
+      .step p .lo { color: var(--faint); }
+
+      .cmd { display: flex; align-items: center; gap: .5rem; background: var(--bg); border: 1px solid var(--border);
+        border-radius: 12px; padding: .6rem .7rem; margin-top: .1rem; }
+      .cmd code { flex: 1; min-width: 0; font-family: ui-monospace, "SF Mono", Menlo, monospace; font-size: .84rem;
+        color: var(--ink); overflow-x: auto; white-space: nowrap; scrollbar-width: none; }
+      .cmd code::-webkit-scrollbar { display: none; }
+      .copybtn { flex: 0 0 auto; border: none; background: var(--surface-2); color: var(--ink); cursor: pointer;
+        border-radius: 9px; padding: .4rem .7rem; font-size: .78rem; font-weight: 600; display: inline-flex; align-items: center; gap: .3rem; }
+      .copybtn:active { background: var(--clay-tint); }
+      .copybtn.done { background: rgba(123,189,138,.18); color: var(--ok); }
+
+      details.inst { margin-top: .7rem; }
+      details.inst summary { cursor: pointer; color: var(--faint); font-size: .78rem; list-style: none; }
+      details.inst summary::-webkit-details-marker { display: none; }
+      details.inst summary::before { content: "›"; margin-right: .4rem; color: var(--clay); display: inline-block; transition: transform .2s; }
+      details.inst[open] summary::before { transform: rotate(90deg); }
+
+      .field { display: flex; gap: .5rem; margin-top: .2rem; }
+      input#token { flex: 1; min-width: 0; background: var(--bg); border: 1px solid var(--border); color: var(--ink);
+        border-radius: 12px; padding: .8rem .85rem; font-size: .95rem; font-family: ui-monospace, "SF Mono", Menlo, monospace;
+        outline: none; transition: border-color .15s, box-shadow .15s; }
+      input#token::placeholder { color: var(--faint); font-family: inherit; }
+      input#token:focus { border-color: var(--clay); box-shadow: 0 0 0 3px var(--clay-tint); }
+      .pastebtn { flex: 0 0 auto; border: none; background: var(--surface-2); color: var(--ink); cursor: pointer;
+        border-radius: 12px; padding: 0 .9rem; font-size: .82rem; font-weight: 600; }
+      .pastebtn:active { background: var(--clay-tint); }
+      label.sec { display: block; font-size: .8rem; color: var(--muted); margin: .9rem 0 .4rem .1rem; }
+      input#secret { width: 100%; background: var(--bg); border: 1px solid var(--border); color: var(--ink);
+        border-radius: 12px; padding: .7rem .85rem; font-size: .95rem; outline: none; }
 
       button.go {
-        width: 100%; margin-top: 1.3rem; border: none; border-radius: 999px; padding: .9rem 1.2rem;
+        width: 100%; margin-top: .8rem; border: none; border-radius: 999px; padding: .9rem 1.2rem;
         font-size: 1rem; font-weight: 600; background: var(--clay); color: var(--on-clay); cursor: pointer;
-        transition: background .15s, transform .08s;
+        transition: background .15s, transform .08s, opacity .15s;
       }
       button.go:active { background: var(--clay-deep); transform: scale(.99); }
-      button.go:disabled { opacity: .5; cursor: default; }
+      button.go:disabled { opacity: .45; cursor: default; }
 
-      .msg { font-size: .84rem; margin-top: 1rem; padding: .7rem .85rem; border-radius: 12px; display: none; line-height: 1.45; }
+      .msg { font-size: .84rem; margin-top: .8rem; padding: .7rem .85rem; border-radius: 12px; display: none; line-height: 1.45; }
       .msg.show { display: block; }
       .msg.ok { background: rgba(123,189,138,.12); color: var(--ok); border: 1px solid rgba(123,189,138,.3); }
       .msg.err { background: rgba(224,128,106,.1); color: var(--err); border: 1px solid rgba(224,128,106,.3); }
+      .spin { display: inline-block; width: .8rem; height: .8rem; border: 2px solid var(--clay-tint);
+        border-top-color: var(--clay); border-radius: 50%; animation: sp .7s linear infinite; vertical-align: -1px; margin-right: .4rem; }
+      @keyframes sp { to { transform: rotate(360deg); } }
 
-      details { margin-top: 1.6rem; border-top: 1px solid var(--border); padding-top: 1.1rem; }
-      summary { cursor: pointer; color: var(--muted); font-size: .9rem; font-weight: 500; list-style: none; }
-      summary::-webkit-details-marker { display: none; }
-      summary::before { content: "›"; display: inline-block; margin-right: .5rem; transition: transform .2s; color: var(--clay); }
-      details[open] summary::before { transform: rotate(90deg); }
-      .steps { margin: 1rem 0 0; padding: 0; list-style: none; counter-reset: s; }
-      .steps li { position: relative; padding: 0 0 1rem 2.2rem; color: var(--muted); font-size: .88rem; line-height: 1.55; counter-increment: s; }
-      .steps li::before {
-        content: counter(s); position: absolute; left: 0; top: -.05rem; width: 1.55rem; height: 1.55rem;
-        border-radius: 50%; background: var(--clay-tint); color: var(--clay); font-size: .8rem; font-weight: 700;
-        display: grid; place-items: center;
-      }
-      .steps code { background: var(--bg); border: 1px solid var(--border); border-radius: 7px;
-        padding: .12rem .4rem; font-size: .82rem; color: var(--ink); white-space: nowrap; }
-      .foot { text-align: center; color: var(--faint); font-size: .74rem; margin-top: 1.8rem; line-height: 1.5; }
+      .done-card { display: none; text-align: center; background: var(--surface); border: 1px solid rgba(123,189,138,.35);
+        border-radius: 20px; padding: 1.6rem 1.2rem; }
+      .done-card.show { display: block; }
+      .done-card .big { font-size: 2rem; margin-bottom: .3rem; }
+      .done-card h2 { font-size: 1.15rem; margin: 0 0 .3rem; font-weight: 600; }
+      .done-card p { color: var(--muted); font-size: .86rem; margin: 0; }
+
+      .foot { text-align: center; color: var(--faint); font-size: .74rem; margin-top: 1.4rem; line-height: 1.5; }
     </style>
   </head>
   <body>
     <div class="wrap">
       <div class="brand">
         <svg class="spark" width="30" height="30" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-          <path d="M12 2.5 13.7 9.3 20.5 11 13.7 12.7 12 19.5 10.3 12.7 3.5 11 10.3 9.3z"
-                fill="currentColor" />
+          <path d="M12 2.5 13.7 9.3 20.5 11 13.7 12.7 12 19.5 10.3 12.7 3.5 11 10.3 9.3z" fill="currentColor" />
         </svg>
         <div>
           <h1 class="serif">Connect Claude</h1>
@@ -101,32 +122,50 @@
         <div class="txt"><b id="stTitle">Checking…</b><div class="meta" id="stMeta">&nbsp;</div></div>
       </div>
 
-      <div class="card">
-        <label for="token">Claude token</label>
-        <input id="token" type="password" autocomplete="off" autocapitalize="off" spellcheck="false"
-               placeholder="sk-ant-oat01-…" />
-        <div class="hint">
-          From your Claude Pro/Max subscription via <code>claude setup-token</code> — no extra API cost.
-          An <code>sk-ant-api…</code> key works too (billed per token).
-        </div>
-
-        <label for="secret" id="secretLabel" style="display:none">Admin secret</label>
-        <input id="secret" type="password" autocomplete="off" placeholder="required by this server"
-               style="display:none" />
-
-        <button id="go" class="go">Connect</button>
-        <div id="msg" class="msg"></div>
+      <!-- Success state (shown once connected) -->
+      <div id="done" class="done-card">
+        <div class="big">✅</div>
+        <h2>You're all set</h2>
+        <p id="doneMeta">Claude is connected. Close this and use the watch.</p>
       </div>
 
-      <details>
-        <summary>How to get a token</summary>
-        <ol class="steps">
-          <li>On your computer: <code>npm i -g @anthropic-ai/claude-code</code> (if you don't have it already).</li>
-          <li>Run <code>claude setup-token</code> and sign in with your Claude account in the browser.</li>
-          <li>Copy the <code>sk-ant-oat01-…</code> token that's printed and paste it above.</li>
-          <li>Press <b>Connect</b> — it's stored in the backend and used by the watch. Valid ~1 year.</li>
-        </ol>
-      </details>
+      <!-- Guided flow (hidden once connected) -->
+      <div id="flow">
+        <div class="step">
+          <span class="n">1</span>
+          <h2>Run this on your computer</h2>
+          <div class="cmd">
+            <code id="cmd">claude setup-token</code>
+            <button class="copybtn" id="copy" type="button">Copy</button>
+          </div>
+          <details class="inst">
+            <summary>Don't have Claude Code yet?</summary>
+            <div class="cmd" style="margin-top:.5rem">
+              <code id="cmd2">npm i -g @anthropic-ai/claude-code</code>
+              <button class="copybtn" id="copy2" type="button">Copy</button>
+            </div>
+          </details>
+        </div>
+
+        <div class="step">
+          <span class="n">2</span>
+          <h2>Sign in with your Claude account</h2>
+          <p>A browser opens — log in and approve. <span class="lo">Uses your Pro/Max subscription, no extra cost. A one-year token is printed.</span></p>
+        </div>
+
+        <div class="step">
+          <span class="n">3</span>
+          <h2>Paste the token here</h2>
+          <div class="field">
+            <input id="token" type="password" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="sk-ant-oat01-…" />
+            <button class="pastebtn" id="paste" type="button">Paste</button>
+          </div>
+          <label class="sec" id="secretLabel" style="display:none" for="secret">Admin secret</label>
+          <input id="secret" autocomplete="off" placeholder="required by this server" style="display:none" />
+          <button id="go" class="go" disabled>Connect</button>
+          <div id="msg" class="msg"></div>
+        </div>
+      </div>
 
       <div class="foot">
         The token is sent encrypted (HTTPS) and stored only on your server — never in the app or in git.
@@ -136,24 +175,26 @@
     <script>
       const $ = (id) => document.getElementById(id);
       const statusEl = $("status");
-      let adminRequired = false;
+      let adminRequired = false, busy = false;
 
       const KIND = { subscription: "subscription", apikey: "API key" };
       const SRC = { stored: "pasted token", env: "environment variable", none: "" };
+      const looksLikeToken = (t) => /^sk-ant-\S{18,}$/.test(String(t).trim());
 
       async function refresh() {
         try {
-          const r = await fetch("/connect/status");
-          const s = await r.json();
+          const s = await (await fetch("/connect/status")).json();
           if (s.connected) {
             statusEl.className = "status on";
             $("stTitle").textContent = "Connected";
             $("stMeta").textContent = `${KIND[s.kind] ?? s.kind} · ${SRC[s.source] ?? s.source}`;
+            showConnected();
             verifyAccount();
           } else {
             statusEl.className = "status off";
             $("stTitle").textContent = "Not connected";
-            $("stMeta").textContent = "Paste a token below to get started.";
+            $("stMeta").textContent = "Follow the 3 steps below.";
+            $("done").classList.remove("show"); $("flow").style.display = "";
           }
         } catch {
           statusEl.className = "status off";
@@ -161,50 +202,68 @@
           $("stMeta").textContent = "";
         }
       }
+      function showConnected() { $("flow").style.display = "none"; $("done").classList.add("show"); }
 
-      function showMsg(kind, text) {
-        const m = $("msg");
-        m.className = `msg show ${kind}`;
-        m.textContent = text;
-      }
-
-      // Verify the credential against Anthropic and show whose account it is.
       async function verifyAccount() {
         try {
-          const r = await fetch("/connect/account");
-          const d = await r.json();
+          const d = await (await fetch("/connect/account")).json();
           if (d && d.account) {
             const a = d.account;
             const plan = a.subscriptionType || (a.apiProvider === "firstParty" ? "Claude subscription" : a.apiProvider) || "connected";
-            $("stMeta").textContent = `${a.email || "verified"} · ${String(plan).replace(/_/g, " ")}`;
+            const line = `${a.email || "verified"} · ${String(plan).replace(/_/g, " ")}`;
+            $("stMeta").textContent = line;
+            $("doneMeta").textContent = `Signed in as ${line}. Close this and use the watch.`;
           }
-        } catch {
-          /* verification is best-effort */
-        }
+        } catch { /* best effort */ }
+      }
+
+      function showMsg(kind, html) { const m = $("msg"); m.className = `msg show ${kind}`; m.innerHTML = html; }
+
+      // Copy-to-clipboard for the setup commands.
+      async function copyCmd(btn, text) {
+        try { await navigator.clipboard.writeText(text); }
+        catch { const r = document.createRange(); const el = document.createElement("textarea"); el.value = text; document.body.appendChild(el); el.select(); try { document.execCommand("copy"); } catch {} el.remove(); }
+        const old = btn.textContent; btn.textContent = "Copied ✓"; btn.classList.add("done");
+        setTimeout(() => { btn.textContent = old; btn.classList.remove("done"); }, 1600);
+      }
+
+      // Paste from clipboard (auto-connects if it's a token).
+      async function pasteFromClipboard() {
+        try {
+          const t = await navigator.clipboard.readText();
+          if (t) { $("token").value = t.trim(); onTokenInput(); }
+          else { $("token").focus(); }
+        } catch { $("token").focus(); showMsg("err", "Couldn't read the clipboard — long-press the field and paste."); }
+      }
+
+      // As soon as a valid-looking token is present, connect automatically.
+      let autoTimer = null;
+      function onTokenInput() {
+        const t = $("token").value.trim();
+        $("go").disabled = !t || busy;
+        clearTimeout(autoTimer);
+        if (looksLikeToken(t) && !busy && !adminRequired) autoTimer = setTimeout(connect, 250);
       }
 
       async function connect() {
+        if (busy) return;
         const token = $("token").value.trim();
         const secret = $("secret").value.trim();
-        if (!token) return showMsg("err", "Paste a token first.");
-        $("go").disabled = true;
-        showMsg("", "Connecting…");
-        $("msg").className = "msg show";
+        if (!token) return showMsg("err", "Paste your token first.");
+        busy = true; $("go").disabled = true;
+        showMsg("", '<span class="spin"></span>Connecting…');
         try {
-          const r = await fetch("/connect", {
-            method: "POST",
-            headers: { "content-type": "application/json" },
-            body: JSON.stringify({ token, secret }),
-          });
+          const r = await fetch("/connect", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ token, secret }) });
           const data = await r.json();
           if (r.ok) {
-            showMsg("ok", "Done! Claude is connected. You can close this page and use the watch.");
             $("token").value = "";
             adminRequired = Boolean(data.adminRequired);
-            refresh();
+            showConnected();
+            statusEl.className = "status on"; $("stTitle").textContent = "Connected";
+            $("stMeta").textContent = `${KIND[data.kind] ?? data.kind} · verifying…`;
+            verifyAccount();
           } else if (r.status === 403) {
-            adminRequired = true;
-            revealSecret();
+            adminRequired = true; revealSecret();
             showMsg("err", data.error || "Wrong admin secret.");
           } else {
             showMsg("err", data.error || "Something went wrong.");
@@ -212,18 +271,19 @@
         } catch {
           showMsg("err", "Couldn't reach the server.");
         } finally {
-          $("go").disabled = false;
+          busy = false; onTokenInput();
         }
       }
 
-      function revealSecret() {
-        $("secret").style.display = "";
-        $("secretLabel").style.display = "";
-      }
+      function revealSecret() { $("secret").style.display = ""; $("secretLabel").style.display = ""; }
 
-      $("go").addEventListener("click", connect);
+      $("copy").addEventListener("click", (e) => copyCmd(e.currentTarget, "claude setup-token"));
+      $("copy2").addEventListener("click", (e) => copyCmd(e.currentTarget, "npm i -g @anthropic-ai/claude-code"));
+      $("paste").addEventListener("click", pasteFromClipboard);
+      $("token").addEventListener("input", onTokenInput);
       $("token").addEventListener("keydown", (e) => { if (e.key === "Enter") connect(); });
       $("secret").addEventListener("keydown", (e) => { if (e.key === "Enter") connect(); });
+      $("go").addEventListener("click", connect);
       refresh();
     </script>
   </body>
