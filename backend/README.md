@@ -35,9 +35,10 @@ npm install
 npm run build && npm start      # eller: npm run dev
 ```
 
-Autentisering mot Anthropic: Claude Agent SDK plockar upp `ANTHROPIC_API_KEY`
-eller en `claude`-inloggning från miljön. Sätt `ANTHROPIC_API_KEY` innan start
-om ingen finns.
+Autentisering mot Anthropic sker via **Anslut Claude**-sidan (se nedan) — du
+behöver alltså **ingen** miljövariabel för att starta. Alternativt plockar Agent
+SDK upp `CLAUDE_CODE_OAUTH_TOKEN` eller `ANTHROPIC_API_KEY` från miljön om de är
+satta.
 
 Två klienter:
 - **http://localhost:8080/** — enkel testklient (QR → prompt → svar).
@@ -47,6 +48,36 @@ Två klienter:
 
 Flöde i båda: skanna QR med mobilen (eller öppna länken) → godkänn → klienten
 plockar upp token, kopplar upp WSS och driver Claude Code.
+
+## Anslut Claude (klistra in din prenumerations-token en gång)
+
+Istället för att redigera miljövariabler ansluter du Claude från en sida i
+appen. Öppna **`/connect`** på din telefon (`https://<din-app>/connect`) och
+klistra in din token — den lagras i backend och används av varje Claude
+Code-session som startas.
+
+```bash
+# På din dator, en gång:
+npm i -g @anthropic-ai/claude-code   # om du inte redan har den
+claude setup-token                   # logga in med ditt Claude Pro/Max-konto
+# → kopiera sk-ant-oat01-... och klistra in på /connect
+```
+
+`sk-ant-oat…` = din **prenumeration** (ingen extra API-kostnad, giltig ~1 år).
+En `sk-ant-api…`-nyckel fungerar också (betalar per token). Backend väljer rätt
+miljövariabel (`CLAUDE_CODE_OAUTH_TOKEN` resp. `ANTHROPIC_API_KEY`) automatiskt
+när Claude Code startas.
+
+- Sätt `ADMIN_SECRET` för att skydda sidan så bara du kan ansluta (sidan frågar
+  då efter secreten).
+- Token sparas i `CRED_FILE` (default `/tmp/claude-cred.json`). På en efemär värd
+  (Cloud Run, Render free) försvinner `/tmp` vid omstart — peka `CRED_FILE` på en
+  persistent disk för att slippa klistra in igen.
+- Innan Claude anslutits svarar WSS `error: "Claude ej ansluten — öppna /connect
+  på telefonen"` på prompts.
+
+HTTP: `GET /connect` (sidan) · `GET /connect/status` (`{connected,source,kind}`) ·
+`POST /connect` (`{token, secret?}`).
 
 ## Demo-läge (för AppGallery-granskare / andra testare)
 
@@ -77,7 +108,10 @@ svarar servern `stt_unavailable` och klienten faller tillbaka på textinmatning.
 | `PROJECTS_DIR` | `/tmp/projects` | Projekt (varje underkatalog = ett projekt) |
 | `CODE_DIR` | `/tmp/code` | Claude Code-repos (varje underkatalog = ett repo) |
 | `CLAUDE_MODEL` | *(SDK-default)* | Ev. modellöverstyrning |
-| `ANTHROPIC_API_KEY` | — | Läses av Agent SDK |
+| `CLAUDE_CODE_OAUTH_TOKEN` | — | Prenumerations-token (alternativ till `/connect`) |
+| `ANTHROPIC_API_KEY` | — | API-nyckel (alternativ till `/connect`) |
+| `CRED_FILE` | `/tmp/claude-cred.json` | Var `/connect`-token lagras |
+| `ADMIN_SECRET` | — | Skyddar `/connect` (tomt = öppet) |
 | `DEMO_MODE` | `false` | Isolerat sandbox-läge (seedat repo, caps) |
 | `DEMO_BUDGET_USD` | `1.0` | Kostnadstak per session i demo-läge |
 | `RATE_LIMIT_PER_MIN` | `12` | Max prompts per minut och session |
@@ -126,7 +160,8 @@ Svar: `list_result` (`scope`, `items[{id,title,subtitle}]`) · `chat_opened`
 verktygstillgång.
 
 HTTP-compliance: `POST /report` (med token), `DELETE /account` (med token),
-`GET /meta` (`{ demoMode, stt }`).
+`GET /meta` (`{ demoMode, stt, push, claude }`). Anslutning: `GET /connect`,
+`GET /connect/status`, `POST /connect` (se **Anslut Claude** ovan).
 
 ## Deploya till Google Cloud Run
 
@@ -134,12 +169,13 @@ HTTP-compliance: `POST /report` (med token), `DELETE /account` (med token),
 gcloud run deploy huawei-claude-backend \
   --source backend \
   --region europe-north1 \
-  --allow-unauthenticated \
-  --set-env-vars ANTHROPIC_API_KEY=sk-...   # helst via Secret Manager
+  --allow-unauthenticated
+# → öppna sedan https://<url>/connect och klistra in din token (se "Anslut Claude").
 ```
 
-`Dockerfile` installerar `git` i imagen (Claude Codes Bash/Read/Edit behöver det)
-och kör `node dist/server.js`. WebSocket och långa requests stöds av Cloud Run.
+Ingen nyckel behövs vid deploy — anslut via `/connect` efteråt. `Dockerfile`
+installerar `git` i imagen (Claude Codes Bash/Read/Edit behöver det) och kör
+`node dist/server.js`. WebSocket och långa requests stöds av Cloud Run.
 
 ## Kända begränsningar (medvetna för prototypen)
 

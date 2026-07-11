@@ -39,6 +39,7 @@ import {
 import { getOrCreateSession, disposeSession, type UserSession } from "./user-session.js";
 import { transcribe, SttNotConfiguredError } from "./stt.js";
 import { pushConfigured } from "./config.js";
+import { loadCred, isConnected, credStatus, setCred, validToken } from "./claude-cred.js";
 
 const execFileP = promisify(execFile);
 const PUBLIC_DIR = join(dirname(fileURLToPath(import.meta.url)), "..", "public");
@@ -47,6 +48,7 @@ await mkdir(config.workspaceDir, { recursive: true });
 await seedWorkspaceIfEmpty(config.workspaceDir);
 await mkdir(config.chatsDir, { recursive: true });
 if (config.demoMode) await seedIfEmpty();
+await loadCred();
 
 // In demo mode the reviewer's actions must never touch a real repo — a fresh,
 // seeded, isolated workspace is used instead.
@@ -151,7 +153,26 @@ const server = createServer(async (req, res) => {
 
   // Lets the client learn which features are available (mic, demo banner).
   if (path === "/meta") {
-    return json(res, 200, { demoMode: config.demoMode, stt: sttConfigured(), push: pushConfigured() });
+    return json(res, 200, { demoMode: config.demoMode, stt: sttConfigured(), push: pushConfigured(), claude: isConnected() });
+  }
+
+  // --- Connect Claude (paste your subscription token once) ---------------
+  if (path === "/connect" && req.method === "GET") {
+    return serveFile(res, "connect.html", "text/html; charset=utf-8");
+  }
+  if (path === "/connect/status" && req.method === "GET") {
+    return json(res, 200, credStatus());
+  }
+  if (path === "/connect" && req.method === "POST") {
+    const { token, secret } = await readBody(req);
+    if (config.adminSecret && String(secret ?? "") !== config.adminSecret) {
+      return json(res, 403, { error: "fel admin-secret" });
+    }
+    if (!validToken(String(token ?? ""))) {
+      return json(res, 400, { error: "ogiltig token (förväntar sk-ant-oat… eller sk-ant-api…)" });
+    }
+    await setCred(String(token));
+    return json(res, 200, { ...credStatus(), adminRequired: Boolean(config.adminSecret) });
   }
 
   // --- Device flow -------------------------------------------------------
@@ -224,6 +245,7 @@ wss.on("connection", (ws: WebSocket) => {
   };
 
   const guard = (): boolean => {
+    if (!isConnected()) { send({ type: "error", message: "Claude ej ansluten — öppna /connect på telefonen" }); return false; }
     if (!hasConsent(token)) { send({ type: "needs_consent" }); return false; }
     if (!allowRequest(token, config.rateLimitPerMin)) { send({ type: "error", message: "rate limit — vänta en stund" }); return false; }
     if (config.demoMode && isOverBudget(token, config.demoBudgetUsd)) { send({ type: "error", message: "demo-budget slut" }); return false; }
@@ -256,7 +278,7 @@ wss.on("connection", (ws: WebSocket) => {
           us.systemPrompt = undefined;
           us.rebuildClaude();
         }
-        send({ type: "authed", consented: hasConsent(token), demoMode: config.demoMode, push: pushConfigured() });
+        send({ type: "authed", consented: hasConsent(token), demoMode: config.demoMode, push: pushConfigured(), claude: isConnected() });
       } else {
         send({ type: "error", message: "invalid or expired token" });
         ws.close();
@@ -422,4 +444,6 @@ server.listen(config.port, () => {
   console.log(`  demoMode:   ${config.demoMode}`);
   console.log(`  stt:        ${sttConfigured() ? "configured" : "not configured"}`);
   console.log(`  push:       ${pushConfigured() ? "configured" : "not configured (logs instead)"}`);
+  const cs = credStatus();
+  console.log(`  claude:     ${cs.connected ? `${cs.kind} (${cs.source})` : "NOT connected — open /connect"}`);
 });

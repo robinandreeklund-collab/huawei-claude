@@ -146,10 +146,13 @@ Tal → AudioCapturer (PCM 16k/16bit/mono)
 | Lager | Vad | Hur |
 |---|---|---|
 | **Klocka ↔ backend** | "Får klockan styra din backend?" | QR/device-flow (nedan) — *din* inloggning på klockan |
-| **Backend ↔ Claude** | Hur backend kör din Claude Code | **Din prenumeration** via `CLAUDE_CODE_OAUTH_TOKEN` |
+| **Backend ↔ Claude** | Hur backend kör din Claude Code | **Din prenumeration** — token från `claude setup-token`, ansluten via `/connect` |
 
 För **personligt bruk** (bara du) kör backenden på din **Claude Pro/Max** — generera en
-långlivad token med `claude setup-token` och sätt den som `CLAUDE_CODE_OAUTH_TOKEN`. Ingen
+långlivad token med `claude setup-token` och **anslut den via `/connect`-sidan** (klistra
+in en gång på telefonen; backend lagrar den i `CRED_FILE` och injicerar rätt miljövariabel,
+`CLAUDE_CODE_OAUTH_TOKEN` resp. `ANTHROPIC_API_KEY`, i varje Claude Code-process). Sidan kan
+skyddas med `ADMIN_SECRET`. Att sätta miljövariabeln direkt fungerar som alternativ. Ingen
 betalning per token. Detta är det avsedda sättet för individuell användning av Claude Code
 ([källa](https://code.claude.com/docs/en/authentication)).
 

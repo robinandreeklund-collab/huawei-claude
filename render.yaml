@@ -16,16 +16,28 @@ services:
       # Sandbox mode: seeded example content, budget + rate caps. Safe for testing.
       - key: DEMO_MODE
         value: "true"
-      # Use YOUR Claude Pro/Max subscription — no per-token API billing.
-      # Generate once on your own machine:
+      #
+      # NO Claude credential is needed here to deploy. After the service is live,
+      # open  https://<your-app>.onrender.com/connect  on your phone and paste the
+      # token from `claude setup-token` once — it's stored by the backend and uses
+      # YOUR Claude Pro/Max subscription (no per-token API billing).
+      #
       #   npm i -g @anthropic-ai/claude-code   (if not installed)
       #   claude setup-token                   (log in with your Claude account)
-      # Copy the sk-ant-oat01-... token; Render prompts for it here (never committed).
-      # Treat it like a password; it's valid ~1 year. Do NOT also set ANTHROPIC_API_KEY.
-      - key: CLAUDE_CODE_OAUTH_TOKEN
+      #   → copy the sk-ant-oat01-... token, paste it on the /connect page.
+      #
+      # Optional — protect the /connect page with a shared secret so only you can
+      # set the credential (Render prompts for it; never committed):
+      - key: ADMIN_SECRET
         sync: false
-      # Alternative (pay-per-token API billing instead of subscription): remove the
-      # line above and set ANTHROPIC_API_KEY in the Render dashboard instead.
+      # Optional — persist the connected token across restarts/redeploys by pointing
+      # CRED_FILE at a Render persistent disk mount (otherwise re-paste after a deploy):
+      # - key: CRED_FILE
+      #   value: /data/claude-cred.json
+      #
+      # Alternatives to the /connect page (either also works, set in the dashboard):
+      #   CLAUDE_CODE_OAUTH_TOKEN  — subscription token, same as /connect but via env
+      #   ANTHROPIC_API_KEY        — pay-per-token API billing instead of subscription
       #
       # Optional voice (Swedish STT): set STT_API_URL + STT_API_KEY in the dashboard
       # (any OpenAI-compatible /audio/transcriptions endpoint).

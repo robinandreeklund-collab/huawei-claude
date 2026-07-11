@@ -8,28 +8,34 @@ Huawei Watch Ultimate 2 (HarmonyOS NEXT).
 [![Deploy to Render](https://render.com/images/deploy-to-render-button.svg)](https://render.com/deploy?repo=https://github.com/robinandreeklund-collab/huawei-claude)
 
 Klicka på knappen → Render läser [`render.yaml`](render.yaml) och sätter upp
-backenden (Docker, demo-läge). När den är uppe: öppna
-`https://<din-app>.onrender.com/watch` i mobilen/webbläsaren och testa hela flödet
-(QR-inloggning → chattar/projekt/kod → röst/text).
+backenden (Docker, demo-läge). **Inga hemligheter behövs vid deployen.** När den
+är uppe: öppna `https://<din-app>.onrender.com/watch` i mobilen/webbläsaren och
+testa hela flödet (QR-inloggning → chattar/projekt/kod → röst/text).
 
-### Använd din Claude-prenumeration (ingen extra kostnad)
+### Anslut din Claude-prenumeration (ingen extra kostnad)
 
-Backenden kör på **din Claude Pro/Max**, inte betal-per-token-API. Skapa en
-långlivad token en gång på din egen dator:
+Backenden kör på **din Claude Pro/Max**, inte betal-per-token-API. Efter deployen
+öppnar du **`https://<din-app>.onrender.com/connect`** på telefonen och klistrar
+in din token där — en gång. Skapa den på din egen dator:
 
 ```bash
 npm i -g @anthropic-ai/claude-code      # om du inte redan har den
 claude setup-token                      # logga in med ditt Claude-konto
 ```
 
-Kopiera token (`sk-ant-oat01-…`, giltig ~1 år) och klistra in den som
-**`CLAUDE_CODE_OAUTH_TOKEN`** när Render frågar under deployen. Behandla den som ett
-lösenord. Klockan ser den aldrig — QR-koden ger bara klockan en token till din backend.
+Kopiera token (`sk-ant-oat01-…`, giltig ~1 år) och klistra in den på
+`/connect`-sidan. Behandla den som ett lösenord. Klockan ser den aldrig — den
+lagras bara i din backend, aldrig i appen eller i git.
 
 > **De två inloggningarna:** QR-koden = *din inloggning på klockan* (klocka ↔ backend).
-> `CLAUDE_CODE_OAUTH_TOKEN` = hur backenden kör *din* Claude Code på *din* prenumeration.
-> Detta är tillåtet för personligt bruk (bara du). En API-nyckel är ett alternativ om
-> du hellre vill betala per token — sätt `ANTHROPIC_API_KEY` istället. Sätt inte båda.
+> Token på `/connect` = hur backenden kör *din* Claude Code på *din* prenumeration.
+> Detta är tillåtet för personligt bruk (bara du). En API-nyckel (`sk-ant-api…`)
+> fungerar också om du hellre betalar per token.
+>
+> Vill du hellre sätta den som miljövariabel? `CLAUDE_CODE_OAUTH_TOKEN` (eller
+> `ANTHROPIC_API_KEY`) i Render-dashboarden fungerar lika bra. Sätt `ADMIN_SECRET`
+> om du vill skydda `/connect`-sidan, och `CRED_FILE` på en persistent disk om du
+> vill slippa klistra in igen efter en omdeploy.
 
 > Hittar Render inte `render.yaml`? Den ligger på branchen
 > `claude/huawei-watch-app-f0gwye`. Välj den branchen i Render (New ▸ Blueprint ▸

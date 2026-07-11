@@ -18,6 +18,12 @@ export const config = {
   projectsDir: process.env.PROJECTS_DIR || "/tmp/projects",
   codeDir: process.env.CODE_DIR || "/tmp/code",
 
+  // "Connect Claude" page: paste your `claude setup-token` credential once instead
+  // of setting it as an env var. Stored here (survives restarts only if CRED_FILE
+  // is on a persistent disk). Optional ADMIN_SECRET gates who may set it.
+  credFile: process.env.CRED_FILE || "/tmp/claude-cred.json",
+  adminSecret: process.env.ADMIN_SECRET || "",
+
   // Demo / sandbox mode — used for the instance an AppGallery reviewer tests
   // against. Isolated workspace, seeded example repo, hard budget + rate caps,
   // and no access to the operator's real repo or key beyond what env provides.

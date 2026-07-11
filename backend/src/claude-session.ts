@@ -13,6 +13,7 @@ import {
   type CanUseTool,
 } from "@anthropic-ai/claude-agent-sdk";
 import { moderate, FILTERED_NOTICE } from "./moderation.js";
+import { spawnEnv } from "./claude-cred.js";
 
 type Emit = (event: Record<string, unknown>) => void;
 
@@ -108,6 +109,7 @@ export class ClaudeSession {
         ...(this.opts.model ? { model: this.opts.model } : {}),
         ...(this.opts.resume ? { resume: this.opts.resume } : {}),
         ...(this.opts.systemPrompt ? { systemPrompt: this.opts.systemPrompt } : {}),
+        env: spawnEnv(), // inject the connected Claude credential (subscription/API key)
         permissionMode: "acceptEdits",
         canUseTool: this.canUseTool,
       },

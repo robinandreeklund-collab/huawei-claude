@@ -1,0 +1,214 @@
+<!doctype html>
+<html lang="sv">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <title>Anslut Claude</title>
+    <style>
+      :root {
+        --bg: #262624; --surface: #1f1e1d; --surface-2: #30302e;
+        --ink: #f7f6f1; --muted: #b1ada1; --faint: #86837c;
+        --clay: #d97757; --clay-deep: #c15f3c; --clay-tint: rgba(217,119,87,.16);
+        --border: #3a3936; --on-clay: #2a1a12;
+        --ok: #7bbd8a; --err: #e0806a;
+        color-scheme: dark;
+      }
+      * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+      body {
+        margin: 0; min-height: 100dvh; background: var(--bg); color: var(--ink);
+        font-family: "Styrene A", ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+        display: flex; justify-content: center;
+        padding: env(safe-area-inset-top) 1.1rem calc(env(safe-area-inset-bottom) + 2rem);
+        -webkit-font-smoothing: antialiased;
+      }
+      .wrap { width: 100%; max-width: 27rem; padding-top: 2.4rem; }
+      .serif { font-family: Copernicus, "Tiempos Text", Georgia, serif; }
+
+      .brand { display: flex; align-items: center; gap: .6rem; margin-bottom: 1.7rem; }
+      .spark { color: var(--clay); flex: 0 0 auto; }
+      .brand h1 { font-size: 1.5rem; font-weight: 500; margin: 0; letter-spacing: -.01em; }
+      .brand .sub { color: var(--faint); font-size: .82rem; margin-top: .1rem; }
+
+      .status {
+        display: flex; align-items: center; gap: .7rem; padding: .9rem 1rem; border-radius: 16px;
+        background: var(--surface); border: 1px solid var(--border); margin-bottom: 1.5rem;
+      }
+      .status .dot { width: .7rem; height: .7rem; border-radius: 50%; background: var(--faint); flex: 0 0 auto;
+        box-shadow: 0 0 0 4px transparent; transition: box-shadow .3s, background .3s; }
+      .status.on .dot { background: var(--ok); box-shadow: 0 0 0 4px rgba(123,189,138,.16); }
+      .status.off .dot { background: var(--err); box-shadow: 0 0 0 4px rgba(224,128,106,.14); }
+      .status .txt { flex: 1; min-width: 0; }
+      .status .txt b { font-weight: 600; font-size: .96rem; }
+      .status .txt .meta { color: var(--faint); font-size: .78rem; margin-top: .12rem; }
+
+      .card { background: var(--surface); border: 1px solid var(--border); border-radius: 20px; padding: 1.3rem 1.2rem; }
+      label { display: block; font-size: .8rem; color: var(--muted); margin: 0 0 .45rem .1rem; }
+      label:not(:first-child) { margin-top: 1.1rem; }
+      input {
+        width: 100%; background: var(--bg); border: 1px solid var(--border); color: var(--ink);
+        border-radius: 13px; padding: .8rem .85rem; font-size: .95rem; font-family: ui-monospace, "SF Mono", Menlo, monospace;
+        outline: none; transition: border-color .15s, box-shadow .15s;
+      }
+      input::placeholder { color: var(--faint); font-family: inherit; }
+      input:focus { border-color: var(--clay); box-shadow: 0 0 0 3px var(--clay-tint); }
+      .hint { font-size: .74rem; color: var(--faint); margin: .5rem .1rem 0; line-height: 1.5; }
+
+      button.go {
+        width: 100%; margin-top: 1.3rem; border: none; border-radius: 999px; padding: .9rem 1.2rem;
+        font-size: 1rem; font-weight: 600; background: var(--clay); color: var(--on-clay); cursor: pointer;
+        transition: background .15s, transform .08s;
+      }
+      button.go:active { background: var(--clay-deep); transform: scale(.99); }
+      button.go:disabled { opacity: .5; cursor: default; }
+
+      .msg { font-size: .84rem; margin-top: 1rem; padding: .7rem .85rem; border-radius: 12px; display: none; line-height: 1.45; }
+      .msg.show { display: block; }
+      .msg.ok { background: rgba(123,189,138,.12); color: var(--ok); border: 1px solid rgba(123,189,138,.3); }
+      .msg.err { background: rgba(224,128,106,.1); color: var(--err); border: 1px solid rgba(224,128,106,.3); }
+
+      details { margin-top: 1.6rem; border-top: 1px solid var(--border); padding-top: 1.1rem; }
+      summary { cursor: pointer; color: var(--muted); font-size: .9rem; font-weight: 500; list-style: none; }
+      summary::-webkit-details-marker { display: none; }
+      summary::before { content: "›"; display: inline-block; margin-right: .5rem; transition: transform .2s; color: var(--clay); }
+      details[open] summary::before { transform: rotate(90deg); }
+      .steps { margin: 1rem 0 0; padding: 0; list-style: none; counter-reset: s; }
+      .steps li { position: relative; padding: 0 0 1rem 2.2rem; color: var(--muted); font-size: .88rem; line-height: 1.55; counter-increment: s; }
+      .steps li::before {
+        content: counter(s); position: absolute; left: 0; top: -.05rem; width: 1.55rem; height: 1.55rem;
+        border-radius: 50%; background: var(--clay-tint); color: var(--clay); font-size: .8rem; font-weight: 700;
+        display: grid; place-items: center;
+      }
+      .steps code { background: var(--bg); border: 1px solid var(--border); border-radius: 7px;
+        padding: .12rem .4rem; font-size: .82rem; color: var(--ink); white-space: nowrap; }
+      .foot { text-align: center; color: var(--faint); font-size: .74rem; margin-top: 1.8rem; line-height: 1.5; }
+    </style>
+  </head>
+  <body>
+    <div class="wrap">
+      <div class="brand">
+        <svg class="spark" width="30" height="30" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+          <path d="M12 2.5 13.7 9.3 20.5 11 13.7 12.7 12 19.5 10.3 12.7 3.5 11 10.3 9.3z"
+                fill="currentColor" />
+        </svg>
+        <div>
+          <h1 class="serif">Anslut Claude</h1>
+          <div class="sub">Huawei Watch Ultimate 2 · relay</div>
+        </div>
+      </div>
+
+      <div id="status" class="status">
+        <span class="dot"></span>
+        <div class="txt"><b id="stTitle">Kontrollerar…</b><div class="meta" id="stMeta">&nbsp;</div></div>
+      </div>
+
+      <div class="card">
+        <label for="token">Claude-token</label>
+        <input id="token" type="password" autocomplete="off" autocapitalize="off" spellcheck="false"
+               placeholder="sk-ant-oat01-…" />
+        <div class="hint">
+          Från din Claude Pro/Max-prenumeration via <code>claude setup-token</code> — ingen extra API-kostnad.
+          En <code>sk-ant-api…</code>-nyckel fungerar också (betalar per token).
+        </div>
+
+        <label for="secret" id="secretLabel" style="display:none">Admin-secret</label>
+        <input id="secret" type="password" autocomplete="off" placeholder="krävs av denna server"
+               style="display:none" />
+
+        <button id="go" class="go">Anslut</button>
+        <div id="msg" class="msg"></div>
+      </div>
+
+      <details>
+        <summary>Så hämtar du en token</summary>
+        <ol class="steps">
+          <li>På din dator: <code>npm i -g @anthropic-ai/claude-code</code> (om du inte redan har den).</li>
+          <li>Kör <code>claude setup-token</code> och logga in med ditt Claude-konto i webbläsaren.</li>
+          <li>Kopiera <code>sk-ant-oat01-…</code>-token som skrivs ut och klistra in den ovan.</li>
+          <li>Tryck <b>Anslut</b> — den sparas i backend och används av klockan. Giltig ca 1 år.</li>
+        </ol>
+      </details>
+
+      <div class="foot">
+        Token skickas krypterat (HTTPS) och lagras bara på din server, aldrig i appen eller i git.
+      </div>
+    </div>
+
+    <script>
+      const $ = (id) => document.getElementById(id);
+      const statusEl = $("status");
+      let adminRequired = false;
+
+      const KIND = { subscription: "prenumeration", apikey: "API-nyckel" };
+      const SRC = { stored: "inklistrad token", env: "miljövariabel", none: "" };
+
+      async function refresh() {
+        try {
+          const r = await fetch("/connect/status");
+          const s = await r.json();
+          if (s.connected) {
+            statusEl.className = "status on";
+            $("stTitle").textContent = "Ansluten";
+            $("stMeta").textContent = `${KIND[s.kind] ?? s.kind} · ${SRC[s.source] ?? s.source}`;
+          } else {
+            statusEl.className = "status off";
+            $("stTitle").textContent = "Inte ansluten";
+            $("stMeta").textContent = "Klistra in en token nedan för att komma igång.";
+          }
+        } catch {
+          statusEl.className = "status off";
+          $("stTitle").textContent = "Kunde inte nå servern";
+          $("stMeta").textContent = "";
+        }
+      }
+
+      function showMsg(kind, text) {
+        const m = $("msg");
+        m.className = `msg show ${kind}`;
+        m.textContent = text;
+      }
+
+      async function connect() {
+        const token = $("token").value.trim();
+        const secret = $("secret").value.trim();
+        if (!token) return showMsg("err", "Klistra in en token först.");
+        $("go").disabled = true;
+        showMsg("", "Ansluter…");
+        $("msg").className = "msg show";
+        try {
+          const r = await fetch("/connect", {
+            method: "POST",
+            headers: { "content-type": "application/json" },
+            body: JSON.stringify({ token, secret }),
+          });
+          const data = await r.json();
+          if (r.ok) {
+            showMsg("ok", "Klart! Claude är ansluten. Du kan stänga sidan och använda klockan.");
+            $("token").value = "";
+            adminRequired = Boolean(data.adminRequired);
+            refresh();
+          } else if (r.status === 403) {
+            adminRequired = true;
+            revealSecret();
+            showMsg("err", data.error || "Fel admin-secret.");
+          } else {
+            showMsg("err", data.error || "Något gick fel.");
+          }
+        } catch {
+          showMsg("err", "Kunde inte nå servern.");
+        } finally {
+          $("go").disabled = false;
+        }
+      }
+
+      function revealSecret() {
+        $("secret").style.display = "";
+        $("secretLabel").style.display = "";
+      }
+
+      $("go").addEventListener("click", connect);
+      $("token").addEventListener("keydown", (e) => { if (e.key === "Enter") connect(); });
+      $("secret").addEventListener("keydown", (e) => { if (e.key === "Enter") connect(); });
+      refresh();
+    </script>
+  </body>
+</html>
