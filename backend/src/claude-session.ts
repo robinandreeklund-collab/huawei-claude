@@ -64,6 +64,8 @@ interface SessionOpts {
   skills?: string[] | "all";
   /** Inline Settings object (login policy, permission rules, language, …). */
   settings?: Record<string, unknown>;
+  /** Like `settings` but evaluated at start() time (picks up late changes). */
+  settingsProvider?: () => Record<string, unknown>;
   /** Called with the per-turn cost so the server can enforce a budget cap. */
   onCost?: (usd: number) => void;
   /** Called when moderation filters a message, for the report log. */
@@ -146,10 +148,10 @@ export class ClaudeSession {
   private streamBuf = "";
   private streamBlocked = false;
   // Pending phone confirmations for dangerous tool calls (spec §7).
-  private pendingConfirm = new Map<string, (allow: boolean) => void>();
+  private pendingConfirm = new Map<string, { resolve: (allow: boolean) => void; timer: NodeJS.Timeout }>();
   private confirmSeq = 0;
   // Pending watch data queries (read_health / get_location round-trips).
-  private pendingQuery = new Map<string, (data: unknown) => void>();
+  private pendingQuery = new Map<string, { resolve: (data: unknown) => void; timer: NodeJS.Timeout }>();
   private querySeq = 0;
 
   constructor(
@@ -174,10 +176,10 @@ export class ClaudeSession {
       const id = `c${++this.confirmSeq}`;
       this.emit({ type: "needs_confirmation", id, tool: toolName, command });
       const allow = await new Promise<boolean>((resolve) => {
-        this.pendingConfirm.set(id, resolve);
-        setTimeout(() => {
+        const timer = setTimeout(() => {
           if (this.pendingConfirm.delete(id)) resolve(false);
         }, CONFIRM_TIMEOUT_MS);
+        this.pendingConfirm.set(id, { resolve, timer });
       });
       return allow
         ? { behavior: "allow", updatedInput: input }
@@ -188,10 +190,11 @@ export class ClaudeSession {
 
   /** Resolve a pending confirmation from the client (allow/deny). */
   resolveConfirm(id: string, allow: boolean): void {
-    const r = this.pendingConfirm.get(id);
-    if (r) {
+    const p = this.pendingConfirm.get(id);
+    if (p) {
+      clearTimeout(p.timer);
       this.pendingConfirm.delete(id);
-      r(allow);
+      p.resolve(allow);
     }
   }
 
@@ -200,19 +203,20 @@ export class ClaudeSession {
   private queryWatch = (kind: string): Promise<unknown> =>
     new Promise((resolve) => {
       const id = `w${++this.querySeq}`;
-      this.pendingQuery.set(id, resolve);
-      this.emit({ type: "watch_query", id, kind });
-      setTimeout(() => {
+      const timer = setTimeout(() => {
         if (this.pendingQuery.delete(id)) resolve(fallbackReading(kind));
       }, 8000);
+      this.pendingQuery.set(id, { resolve, timer });
+      this.emit({ type: "watch_query", id, kind });
     });
 
   /** Resolve a pending watch data query with the value the watch reported. */
   resolveQuery(id: string, data: unknown): void {
-    const r = this.pendingQuery.get(id);
-    if (r) {
+    const p = this.pendingQuery.get(id);
+    if (p) {
+      clearTimeout(p.timer);
       this.pendingQuery.delete(id);
-      r(data);
+      p.resolve(data);
     }
   }
 
@@ -222,6 +226,8 @@ export class ClaudeSession {
     // Merge user-configured MCP servers with the in-process "watch" tool server.
     const mcp: Record<string, unknown> = { ...(o.mcpServers ?? {}) };
     if (o.watchTools) mcp.watch = createWatchToolServer(this.emit, this.queryWatch);
+    // Resolve settings at start time (so a language change before the first turn applies).
+    const settings = o.settingsProvider ? o.settingsProvider() : o.settings;
     this.q = query({
       prompt: this.queue,
       options: {
@@ -240,7 +246,7 @@ export class ClaudeSession {
         ...(o.checkpointing ? { enableFileCheckpointing: true } : {}),
         ...(o.settingSources ? { settingSources: o.settingSources } : {}),
         ...(o.skills ? { skills: o.skills } : {}),
-        ...(o.settings && Object.keys(o.settings).length ? { settings: o.settings as never } : {}),
+        ...(settings && Object.keys(settings).length ? { settings: settings as never } : {}),
         ...(o.promptSuggestions ? { promptSuggestions: true } : {}),
         ...(o.agentProgress ? { agentProgressSummaries: true } : {}),
         ...(o.watchGuidance ? { hooks: { SessionStart: [watchGuidanceHook] } } : {}),
@@ -428,9 +434,9 @@ export class ClaudeSession {
   }
 
   close(): void {
-    for (const r of this.pendingConfirm.values()) r(false);
+    for (const p of this.pendingConfirm.values()) { clearTimeout(p.timer); p.resolve(false); }
     this.pendingConfirm.clear();
-    for (const r of this.pendingQuery.values()) r({ error: "session closed" });
+    for (const p of this.pendingQuery.values()) { clearTimeout(p.timer); p.resolve({ error: "session closed" }); }
     this.pendingQuery.clear();
     this.queue.close();
     this.q?.close?.();

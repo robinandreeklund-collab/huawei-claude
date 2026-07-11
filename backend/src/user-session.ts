@@ -39,6 +39,7 @@ export class UserSession {
   private lastProgress = "";
   private idleTimer: NodeJS.Timeout | null = null;
   private onDispose: () => void;
+  private epoch = 0; // bumped on each rebuildClaude; drops events from a superseded session
 
   constructor(
     public readonly token: string,
@@ -51,6 +52,11 @@ export class UserSession {
   // --- Connection lifecycle -------------------------------------------------
 
   attach(ws: WebSocket): void {
+    // Replacing a live socket (fast reconnect / second device): close the old one
+    // so its later `close` event can't detach us via the identity check below.
+    if (this.ws && this.ws !== ws && this.ws.readyState === 1) {
+      try { this.ws.close(); } catch { /* already gone */ }
+    }
     this.ws = ws;
     this.foreground = true;
     this.clearIdle();
@@ -60,8 +66,10 @@ export class UserSession {
     void this.claude?.reinitialize();
   }
 
-  /** Socket dropped (app backgrounded/closed). Keep Claude running. */
-  detach(): void {
+  /** Socket dropped (app backgrounded/closed). Keep Claude running. A stale socket
+   * closing after a newer one attached is ignored (would otherwise kill the live one). */
+  detach(ws?: WebSocket): void {
+    if (ws && ws !== this.ws) return;
     this.ws = null;
     this.foreground = false;
     this.armIdle();
@@ -141,7 +149,11 @@ export class UserSession {
   rebuildClaude(resume?: string): void {
     this.claude?.close();
     this.lastProgress = "";
-    this.claude = new ClaudeSession(this.emit, {
+    // Events from a superseded ClaudeSession (its drain loop can still deliver a
+    // final turn_done / late error) must not leak into the new context.
+    const gen = ++this.epoch;
+    const emit = (ev: Event): void => { if (gen === this.epoch) this.emit(ev); };
+    this.claude = new ClaudeSession(emit, {
       cwd: this.cwd,
       // config.model (global CLAUDE_MODEL) overrides the per-surface model.
       model: config.model || this.model || undefined,
@@ -156,7 +168,8 @@ export class UserSession {
       watchGuidance: config.watchGuidance,
       watchTools: config.watchTools,
       skills: config.skills === "all" ? "all" : config.skills ? config.skills.split(",").map((s) => s.trim()).filter(Boolean) : undefined,
-      settings: buildSettings(this.language),
+      // Read at start() time so a language change before the first turn takes effect.
+      settingsProvider: () => buildSettings(this.language),
       mcpServers: mcpServers(),
       disallowedTools: config.disallowedTools,
       sandbox: config.sandbox,
@@ -166,8 +179,8 @@ export class UserSession {
       ...(this.systemPrompt ? { systemPrompt: this.systemPrompt } : {}),
       onCost: (usd) => addSpend(this.token, usd),
       onFiltered: (reason, text) => addReport(`auto:${reason}`, text),
-      onSuggestion: (text) => this.emit({ type: "suggestion", text }),
-      onProgress: (text) => { this.lastProgress = text; this.emit({ type: "progress", text }); },
+      onSuggestion: (text) => emit({ type: "suggestion", text }),
+      onProgress: (text) => { if (gen !== this.epoch) return; this.lastProgress = text; this.emit({ type: "progress", text }); },
     });
   }
 

@@ -65,26 +65,24 @@ async function* idlePrompt(): AsyncGenerator<never> {
 export async function probeAccount(force = false): Promise<unknown> {
   if (cachedAccount && !force) return cachedAccount;
   if (!isConnected()) return null;
-  let q: { accountInfo?: () => Promise<unknown>; close?: () => void } | null = null;
+  let q: (AsyncIterable<unknown> & { accountInfo?: () => Promise<unknown>; close?: () => void }) | null = null;
   try {
-    q = query({ prompt: idlePrompt(), options: { env: spawnEnv(), permissionMode: "plan" } }) as unknown as {
-      accountInfo?: () => Promise<unknown>;
-      close?: () => void;
-    };
+    q = query({ prompt: idlePrompt(), options: { env: spawnEnv(), permissionMode: "plan" } }) as unknown as
+      AsyncIterable<unknown> & { accountInfo?: () => Promise<unknown>; close?: () => void };
+    // Drive the message loop in the background so the CLI initializes and the
+    // accountInfo() control request can be answered (without it, accountInfo hangs).
+    const drain = (async () => { try { for await (const _ of q as AsyncIterable<unknown>) { /* discard */ } } catch { /* closed */ } })();
     const info = await Promise.race([
-      q?.accountInfo?.() ?? Promise.resolve(null),
-      new Promise((_, reject) => setTimeout(() => reject(new Error("timeout")), 12000)),
+      q.accountInfo?.() ?? Promise.resolve(null),
+      new Promise((resolve) => setTimeout(() => resolve(null), 15000)),
     ]);
     cachedAccount = info ?? null;
+    void drain;
     return cachedAccount;
   } catch {
     return null;
   } finally {
-    try {
-      q?.close?.();
-    } catch {
-      /* ignore */
-    }
+    try { q?.close?.(); } catch { /* ignore */ }
   }
 }
 

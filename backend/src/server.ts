@@ -28,6 +28,7 @@ import {
   appProject,
   chatsDir,
   seedIfEmpty,
+  safeName,
 } from "./projects.js";
 import {
   createDeviceCode,
@@ -130,10 +131,11 @@ function baseUrl(req: IncomingMessage): string {
 
 function json(res: ServerResponse, status: number, body: unknown): void {
   const payload = JSON.stringify(body);
+  // No wildcard CORS: the watch/login/connect pages are all same-origin, so we
+  // don't want other websites reading account/connection state cross-origin.
   res.writeHead(status, {
     "content-type": "application/json",
     "content-length": Buffer.byteLength(payload),
-    "access-control-allow-origin": "*",
   });
   res.end(payload);
 }
@@ -168,13 +170,8 @@ const server = createServer(async (req, res) => {
   const path = url.pathname;
 
   if (req.method === "OPTIONS") {
-    res
-      .writeHead(204, {
-        "access-control-allow-origin": "*",
-        "access-control-allow-methods": "GET,POST,DELETE,OPTIONS",
-        "access-control-allow-headers": "content-type",
-      })
-      .end();
+    // Same-origin app: reply to preflight without granting cross-origin access.
+    res.writeHead(204, { "access-control-allow-methods": "GET,POST,DELETE,OPTIONS" }).end();
     return;
   }
 
@@ -271,12 +268,26 @@ const server = createServer(async (req, res) => {
 // WebSocket server — authenticated Claude Code stream
 // ---------------------------------------------------------------------------
 
-const wss = new WebSocketServer({ server, path: "/ws" });
+const wss = new WebSocketServer({
+  server,
+  path: "/ws",
+  // Reject cross-origin browser connections (CSWSH). A native watch app sends no
+  // Origin header (allowed); a browser must be same-origin as Host.
+  verifyClient: (info: { origin?: string; req: IncomingMessage }) => {
+    if (!info.origin) return true; // native client / non-browser
+    try {
+      return new URL(info.origin).host === info.req.headers.host;
+    } catch {
+      return false;
+    }
+  },
+});
 
 wss.on("connection", (ws: WebSocket) => {
   let us: UserSession | null = null;
   let token = "";
-  let audio: { mime: string; chunks: Buffer[] } | null = null;
+  let audio: { mime: string; chunks: Buffer[]; bytes: number } | null = null;
+  const MAX_AUDIO_BYTES = 8 * 1024 * 1024; // hard cap so a stuck recorder can't OOM us
 
   // Direct send for request/response acks (only meaningful while connected).
   // Claude's streamed events go through us.emit (buffered + pushed when detached).
@@ -284,13 +295,22 @@ wss.on("connection", (ws: WebSocket) => {
     if (ws.readyState === ws.OPEN) ws.send(JSON.stringify(event));
   };
 
-  const guard = (): boolean => {
+  // Connection + consent + budget checks WITHOUT consuming a rate-limit slot.
+  const guardNoRate = (): boolean => {
     if (!isConnected()) { send({ type: "error", message: "Claude not connected — open /connect on your phone" }); return false; }
     if (!hasConsent(token)) { send({ type: "needs_consent" }); return false; }
-    if (!allowRequest(token, config.rateLimitPerMin)) { send({ type: "error", message: "rate limit — wait a moment" }); return false; }
     if (config.demoMode && isOverBudget(token, config.demoBudgetUsd)) { send({ type: "error", message: "demo budget spent" }); return false; }
     return true;
   };
+  // Full guard for an actual prompt — also consumes one rate-limit slot.
+  const guard = (): boolean => {
+    if (!guardNoRate()) return false;
+    if (!allowRequest(token, config.rateLimitPerMin)) { send({ type: "error", message: "rate limit — wait a moment" }); return false; }
+    return true;
+  };
+  // Control commands (account/usage/models/settings) need consent but must not
+  // eagerly spawn a CLI or run for an un-consented user.
+  const controlOk = (): boolean => isConnected() && hasConsent(token);
 
   const runPrompt = (text: string) => {
     if (!us?.claude || !guard()) return;
@@ -325,6 +345,9 @@ wss.on("connection", (ws: WebSocket) => {
 
     if (msg.type === "auth") {
       if (isValidToken(msg.token as string | undefined)) {
+        // Re-auth on the same socket (token switch): release the previous session
+        // from this socket so it isn't orphaned.
+        if (us) us.detach(ws);
         token = msg.token as string;
         us = getOrCreateSession(token);
         us.attach(ws); // reconnect flushes anything buffered while away
@@ -418,15 +441,18 @@ wss.on("connection", (ws: WebSocket) => {
         send({ type: "chat_opened", context: us.contextLabel, kind: "chat" });
         return;
 
-      case "open_chat":
+      case "open_chat": {
+        const sid = safeName(String(msg.id ?? ""));
+        if (!sid) return send({ type: "error", message: "invalid session id" });
         us.cwd = chatsDir();
         us.contextLabel = "Conversation";
         us.systemPrompt = undefined;
         applyScope(us, "chat");
-        us.rebuildClaude(String(msg.id ?? ""));
+        us.rebuildClaude(sid);
         send({ type: "chat_opened", context: us.contextLabel, kind: "chat" });
-        await replayHistory(String(msg.id ?? ""), us.cwd);
+        await replayHistory(sid, us.cwd);
         return;
+      }
 
       case "open_project": {
         const proj = await appProject(String(msg.id ?? ""));
@@ -479,7 +505,7 @@ wss.on("connection", (ws: WebSocket) => {
         return;
 
       case "usage": {
-        const usage = isConnected() ? await us.claude?.contextUsage() : null;
+        const usage = controlOk() ? await us.claude?.contextUsage() : null;
         send({ type: "usage_result", usage: usage ?? null });
         return;
       }
@@ -496,20 +522,20 @@ wss.on("connection", (ws: WebSocket) => {
         return;
 
       case "models": {
-        const models = isConnected() ? (await us.claude?.models()) ?? [] : [];
+        const models = controlOk() ? (await us.claude?.models()) ?? [] : [];
         send({ type: "models_result", models });
         return;
       }
 
       case "plan_usage": {
-        const usage = isConnected() ? await us.claude?.planUsage() : null;
+        const usage = controlOk() ? await us.claude?.planUsage() : null;
         send({ type: "plan_usage_result", usage: usage ?? null });
         return;
       }
 
       // --- Account & settings ---------------------------------------------
       case "account": {
-        const account = isConnected() ? await us.claude?.accountInfo() : null;
+        const account = controlOk() ? await us.claude?.accountInfo() : null;
         send({ type: "account_result", account: account ?? null });
         return;
       }
@@ -535,27 +561,35 @@ wss.on("connection", (ws: WebSocket) => {
         return;
 
       // --- Session management (Chats): rename / delete / branch ------------
-      case "rename_session":
+      case "rename_session": {
+        const sid = safeName(String(msg.id ?? ""));
+        if (!sid) return send({ type: "error", message: "invalid session id" });
         try {
-          await renameSession(String(msg.id ?? ""), String(msg.title ?? ""), { dir: chatsDir() });
-          send({ type: "session_renamed", id: msg.id, title: msg.title });
+          await renameSession(sid, String(msg.title ?? "").slice(0, 120), { dir: chatsDir() });
+          send({ type: "session_renamed", id: sid, title: msg.title });
         } catch (err) {
           send({ type: "error", message: `rename failed: ${String(err).slice(0, 80)}` });
         }
         return;
+      }
 
-      case "delete_session":
+      case "delete_session": {
+        const sid = safeName(String(msg.id ?? ""));
+        if (!sid) return send({ type: "error", message: "invalid session id" });
         try {
-          await deleteSession(String(msg.id ?? ""), { dir: chatsDir() });
-          send({ type: "session_deleted", id: msg.id });
+          await deleteSession(sid, { dir: chatsDir() });
+          send({ type: "session_deleted", id: sid });
         } catch (err) {
           send({ type: "error", message: `delete failed: ${String(err).slice(0, 80)}` });
         }
         return;
+      }
 
       case "branch_session": {
+        const sidB = safeName(String(msg.id ?? ""));
+        if (!sidB) return send({ type: "error", message: "invalid session id" });
         try {
-          const fork = await forkSession(String(msg.id ?? ""), { dir: chatsDir() });
+          const fork = await forkSession(sidB, { dir: chatsDir() });
           us.cwd = chatsDir();
           us.contextLabel = "Branch";
           us.systemPrompt = undefined;
@@ -576,12 +610,16 @@ wss.on("connection", (ws: WebSocket) => {
 
       // --- Voice pipeline (fas 2) -----------------------------------------
       case "audio_start":
-        audio = { mime: String(msg.mime ?? "audio/webm"), chunks: [] };
+        if (!guardNoRate()) return; // don't buffer for an unconnected/unconsented user
+        audio = { mime: String(msg.mime ?? "audio/webm"), chunks: [], bytes: 0 };
         return;
 
       case "audio_chunk":
         if (audio && typeof msg.data === "string") {
-          audio.chunks.push(Buffer.from(msg.data, "base64"));
+          const chunk = Buffer.from(msg.data, "base64");
+          audio.bytes += chunk.length;
+          if (audio.bytes > MAX_AUDIO_BYTES) { audio = null; send({ type: "error", message: "recording too long" }); return; }
+          audio.chunks.push(chunk);
         }
         return;
 
@@ -590,7 +628,8 @@ wss.on("connection", (ws: WebSocket) => {
         const buf = Buffer.concat(audio.chunks);
         const mime = audio.mime;
         audio = null;
-        if (!guard()) return;
+        // guardNoRate here; the single rate-limit slot is consumed by runPrompt below.
+        if (!guardNoRate()) return;
         if (!sttConfigured()) {
           return send({ type: "stt_unavailable" });
         }
@@ -610,8 +649,8 @@ wss.on("connection", (ws: WebSocket) => {
 
   // Socket dropped: keep the Claude turn running server-side so it can finish and
   // push a notification. The session is torn down only after an idle grace period.
-  ws.on("close", () => us?.detach());
-  ws.on("error", () => us?.detach());
+  ws.on("close", () => us?.detach(ws));
+  ws.on("error", () => us?.detach(ws));
 });
 
 server.listen(config.port, () => {

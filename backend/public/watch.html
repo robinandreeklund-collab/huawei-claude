@@ -465,7 +465,12 @@
           view.style.animation = dir === "back" ? "slideBack .28s var(--ease)" : dir === "fade" ? "fadeUp .22s var(--ease)" : "slideFwd .28s var(--ease)";
         dir = "fwd";
       }
-      function afterRender() { enter(); bindScroller(); }
+      function afterRender() {
+        // Cancel any in-flight momentum scroll so it can't drive the new screen's scroller.
+        if (scrollRaf) { cancelAnimationFrame(scrollRaf); scrollRaf = 0; }
+        targetScroll = null;
+        enter(); bindScroller();
+      }
 
       // --- Crown / touch nav ---
       function registerFocus() { nav.focusables = [...view.querySelectorAll("[data-focus]")]; nav.idx = 0; applyFocus(true); }
@@ -519,7 +524,7 @@
         view.innerHTML = `<div class="center">${burst(42)}<h2 class="serif">Before we start</h2>
           <p class="small">What you say is sent to the backend and Anthropic to run Claude Code.</p>
           <button class="pill" data-focus id="consentBtn">Agree &amp; continue</button></div>`;
-        document.getElementById("consentBtn").onclick = () => ws.send(JSON.stringify({ type: "consent" }));
+        document.getElementById("consentBtn").onclick = () => wsend({ type: "consent" });
         registerFocus(); afterRender();
       }
 
@@ -568,7 +573,7 @@
         view.querySelectorAll("[data-go]").forEach((el) => el.addEventListener("click", () => openMode(el.dataset.go)));
         registerFocus(); afterRender();
       }
-      function openMode(scope) { dir = "fwd"; backStack.push(showHome); showList(scope, "…"); ws.send(JSON.stringify({ type: "list", scope })); }
+      function openMode(scope) { dir = "fwd"; backStack.push(showHome); showList(scope, "…"); wsend({ type: "list", scope }); }
 
       // --- Settings & account screen ---
       const sw = (on) => `<span class="switch ${on ? "on" : ""}"></span>`;
@@ -586,16 +591,16 @@
         const seg = document.getElementById("segLang");
         const paint = () => seg.querySelectorAll("button").forEach((x) => x.classList.toggle("on", x.dataset.l === lang));
         paint();
-        seg.querySelectorAll("button").forEach((x) => x.onclick = () => { lang = x.dataset.l; paint(); ws.send(JSON.stringify({ type: "set_language", lang })); toast("Language: " + (lang || "auto")); });
+        seg.querySelectorAll("button").forEach((x) => x.onclick = () => { lang = x.dataset.l; paint(); wsend({ type: "set_language", lang }); toast("Language: " + (lang || "auto")); });
         view.querySelectorAll(".setrow").forEach((r) => r.onclick = () => {
           const a = r.dataset.a, tog = r.querySelector(".switch");
-          if (a === "model") ws.send(JSON.stringify({ type: "models" }));
-          else if (a === "plan") { planOn = !planOn; tog.classList.toggle("on", planOn); applyPlanClass(); ws.send(JSON.stringify({ type: "plan_mode", on: planOn })); }
-          else if (a === "notif") { notifOn = !notifOn; tog.classList.toggle("on", notifOn); ws.send(JSON.stringify({ type: "set_notifications", on: notifOn })); }
+          if (a === "model") wsend({ type: "models" });
+          else if (a === "plan") { planOn = !planOn; tog.classList.toggle("on", planOn); applyPlanClass(); wsend({ type: "plan_mode", on: planOn }); }
+          else if (a === "notif") { notifOn = !notifOn; tog.classList.toggle("on", notifOn); wsend({ type: "set_notifications", on: notifOn }); }
           else if (a === "tts") { ttsOn = !ttsOn; tog.classList.toggle("on", ttsOn); document.getElementById("ttsBtn").textContent = "Read aloud: " + (ttsOn ? "on" : "off"); if (!ttsOn) speechSynthesis.cancel(); }
         });
-        ws.send(JSON.stringify({ type: "account" }));
-        ws.send(JSON.stringify({ type: "settings_get" }));
+        wsend({ type: "account" });
+        wsend({ type: "settings_get" });
         afterRender();
       }
       function fillAccount(a) {
@@ -611,14 +616,14 @@
         const titles = { chats: "Chats", projects: "Projects", code: "Claude Code" };
         const ico = { chats: "chat", projects: "folder", code: "code" }[scope] || "chat";
         setTop("nav", titles[scope] || scope);
-        if (!items) { view.innerHTML = `<div class="empty">${esc(statusText || "…")}</div>`; afterRender(); return; }
+        if (!items) { view.innerHTML = `<div class="empty">${esc(statusText || "…")}</div>`; nav.focusables = []; nav.idx = 0; afterRender(); return; }
         let rows = scope === "chats"
           ? `<div class="card" data-focus id="newChat"><span class="ic">${icon("plus", 24)}</span><span class="tx"><div class="t">New chat</div></span></div>` : "";
         rows += items.length
           ? items.map((it) => card({ k: "data-id", v: encodeURIComponent(it.id) }, ico, it.title, it.subtitle)).join("")
           : (scope === "chats" ? "" : `<div class="empty">Nothing here yet</div>`);
         view.innerHTML = `<div class="wheel">${rows}</div>`;
-        const nc = document.getElementById("newChat"); if (nc) nc.onclick = () => ws.send(JSON.stringify({ type: "new_chat" }));
+        const nc = document.getElementById("newChat"); if (nc) nc.onclick = () => wsend({ type: "new_chat" });
         view.querySelectorAll("[data-id]").forEach((el, i) => {
           const id = decodeURIComponent(el.dataset.id);
           el.addEventListener("click", () => onPick(scope, id));
@@ -628,15 +633,16 @@
         registerFocus(); afterRender();
       }
       function onPick(scope, id) {
-        if (scope === "chats") ws.send(JSON.stringify({ type: "open_chat", id }));
-        else if (scope === "projects") ws.send(JSON.stringify({ type: "open_project", id }));
-        else if (scope === "code") ws.send(JSON.stringify({ type: "open_code", id }));
+        if (scope === "chats") wsend({ type: "open_chat", id });
+        else if (scope === "projects") wsend({ type: "open_project", id });
+        else if (scope === "code") wsend({ type: "open_code", id });
       }
 
       const nowTime = () => { const d = new Date(); return String(d.getHours()).padStart(2, "0") + ":" + String(d.getMinutes()).padStart(2, "0"); };
       function setStatus(t) { const s = document.getElementById("status"); if (s) s.textContent = t || ""; }
 
       function showChat() {
+        closeCtx(); curStream = null; streamQueue.length = 0; // drop any stale context-menu / half-streamed bubble
         nav.mode = "scroll"; setTop("chat", ctx);
         view.innerHTML = `
           <div class="feed" id="feed"></div>
@@ -650,7 +656,7 @@
           </div>
           <div class="typing" id="typing"><input id="text" placeholder="Message Claude…" /><button id="sendBtn">${icon("chev", 18)}</button></div>`;
         applyPlanClass();
-        document.getElementById("stopBtn").onclick = () => { ws.send(JSON.stringify({ type: "stop" })); setStatus("Stopping…"); };
+        document.getElementById("stopBtn").onclick = () => { wsend({ type: "stop" }); setStatus("Stopping…"); };
         backStack = [showHome];
         wireChat(); afterRender();
       }
@@ -669,12 +675,12 @@
           wrap.className = "mrow in";
           const flag = opts.report ? `<span class="flag">${icon("flag")}</span>` : "";
           wrap.innerHTML = `<div class="bubble in${opts.filtered ? " filtered" : ""}">${esc(text)}${flag}</div><div class="time">${nowTime()}</div>`;
-          if (opts.report) wrap.querySelector(".flag").onclick = (ev) => { ws.send(JSON.stringify({ type: "report", text, reason: "user_report" })); ev.currentTarget.textContent = "✓"; };
+          if (opts.report) wrap.querySelector(".flag").onclick = (ev) => { wsend({ type: "report", text, reason: "user_report" }); ev.currentTarget.textContent = "✓"; };
         }
         feed.appendChild(wrap); feed.scrollTop = feed.scrollHeight;
       }
 
-      function sendPrompt(text) { bubble("me", text); ws.send(JSON.stringify({ type: "prompt", text })); }
+      function sendPrompt(text) { bubble("me", text); wsend({ type: "prompt", text }); }
 
       function showTyping() {
         hideTyping(); const feed = document.getElementById("feed"); if (!feed) return;
@@ -690,6 +696,7 @@
       // filter notice). streamQueue keeps finished stream bubbles awaiting that.
       let curStream = null; const streamQueue = [];
       function startStream() {
+        if (curStream) endStream(); // a new text block began before the last one closed
         hideTyping(); const feed = document.getElementById("feed"); if (!feed) return;
         const row = document.createElement("div"); row.className = "mrow in";
         const b = document.createElement("div"); b.className = "bubble in";
@@ -714,7 +721,7 @@
         else {
           b.classList.remove("filtered"); b.textContent = m.text || b.textContent;
           const flag = document.createElement("span"); flag.className = "flag"; flag.innerHTML = icon("flag");
-          flag.onclick = (ev) => { ws.send(JSON.stringify({ type: "report", text: m.text, reason: "user_report" })); ev.currentTarget.textContent = "✓"; };
+          flag.onclick = (ev) => { wsend({ type: "report", text: m.text, reason: "user_report" }); ev.currentTarget.textContent = "✓"; };
           b.appendChild(flag);
           pendingAI += (m.text || "") + " ";
         }
@@ -758,7 +765,7 @@
         w.innerHTML = `<div class="cfm"><div class="h">${icon("plan", 15)} Confirm ${esc(tool)}</div>
           <code>${esc(command)}</code>
           <div class="row"><button class="allow">${icon("check", 15)} Allow</button><button class="deny">${icon("x", 15)} Deny</button></div></div>`;
-        const done = (allow) => { ws.send(JSON.stringify({ type: "confirm", id, allow })); w.querySelector(".cfm").innerHTML = `<div class="h">${allow ? "Allowed" : "Denied"}</div>`; if (allow) setRunning(true); };
+        const done = (allow) => { wsend({ type: "confirm", id, allow }); w.querySelector(".cfm").innerHTML = `<div class="h">${allow ? "Allowed" : "Denied"}</div>`; if (allow) setRunning(true); };
         w.querySelector(".allow").onclick = () => done(true);
         w.querySelector(".deny").onclick = () => done(false);
         feed.appendChild(w); feed.scrollTop = feed.scrollHeight; buzz([30, 60, 30]);
@@ -785,10 +792,10 @@
         screenEl.appendChild(s);
         s.querySelectorAll(".srow").forEach((r) => r.onclick = () => {
           const act = r.dataset.act;
-          if (act === "plan") { ws.send(JSON.stringify({ type: "plan_mode", on: !planOn })); closeMenu(); }
-          else if (act === "model") { ws.send(JSON.stringify({ type: "models" })); closeMenu(); }
-          else if (act === "usage") { ws.send(JSON.stringify({ type: "usage" })); ws.send(JSON.stringify({ type: "plan_usage" })); toast("Reading context…", 1500); closeMenu(); }
-          else if (act === "rewind") { ws.send(JSON.stringify({ type: "rewind" })); toast("Undoing…", 1500); closeMenu(); }
+          if (act === "plan") { wsend({ type: "plan_mode", on: !planOn }); closeMenu(); }
+          else if (act === "model") { wsend({ type: "models" }); closeMenu(); }
+          else if (act === "usage") { wsend({ type: "usage" }); wsend({ type: "plan_usage" }); toast("Reading context…", 1500); closeMenu(); }
+          else if (act === "rewind") { wsend({ type: "rewind" }); toast("Undoing…", 1500); closeMenu(); }
           else closeMenu();
         });
         s.addEventListener("click", (e) => { if (e.target === s) closeMenu(); });
@@ -824,7 +831,7 @@
         let data;
         if (m.kind === "location") { data = { lat: 59.334, lon: 18.063, place: "Stockholm, SE" }; sensorPill("pin", "Stockholm, SE"); }
         else { const hr = 62 + Math.floor(Math.random() * 26), steps = 3500 + Math.floor(Math.random() * 4200); data = { heartRate: hr, steps }; sensorPill("heart", `${hr} bpm · ${steps.toLocaleString()} steps`); }
-        if (ws && ws.readyState === 1) ws.send(JSON.stringify({ type: "watch_reply", id: m.id, data })); buzz(12);
+        if (ws && ws.readyState === 1) wsend({ type: "watch_reply", id: m.id, data }); buzz(12);
       }
       function sensorPill(ic, text) {
         const feed = document.getElementById("feed"); if (!feed) return;
@@ -869,13 +876,15 @@
 
       // --- Long-press context menu on a chat (rename / delete / branch) ---
       function bindLongPress(el, cb) {
-        let t = null;
-        const down = (e) => { t = setTimeout(() => { t = null; cb(e); }, 480); };
+        let t = null, fired = false;
+        const down = () => { fired = false; t = setTimeout(() => { t = null; fired = true; cb(); }, 480); };
         const cancel = () => { if (t) { clearTimeout(t); t = null; } };
         el.addEventListener("pointerdown", down);
         el.addEventListener("pointerup", cancel);
         el.addEventListener("pointermove", cancel);
         el.addEventListener("pointerleave", cancel);
+        // Swallow the click that follows a long-press so it doesn't ALSO open the item.
+        el.addEventListener("click", (e) => { if (fired) { e.stopPropagation(); e.preventDefault(); fired = false; } }, true);
       }
       function openCtx(id, title) {
         closeCtx();
@@ -889,8 +898,8 @@
         m.querySelectorAll(".ci").forEach((r) => r.onclick = (e) => {
           e.stopPropagation(); const a = r.dataset.a; closeCtx();
           if (a === "rename") renamePrompt(id, title);
-          else if (a === "delete") ws.send(JSON.stringify({ type: "delete_session", id }));
-          else if (a === "branch") ws.send(JSON.stringify({ type: "branch_session", id }));
+          else if (a === "delete") wsend({ type: "delete_session", id });
+          else if (a === "branch") wsend({ type: "branch_session", id });
         });
         setTimeout(() => document.addEventListener("pointerdown", closeCtxOnce, { once: true }), 0);
       }
@@ -905,7 +914,7 @@
         screenEl.appendChild(s);
         const input = document.getElementById("rnInput"); input.focus();
         s.querySelectorAll(".srow").forEach((r) => r.onclick = () => {
-          if (r.dataset.a === "save") { const t = input.value.trim(); if (t) ws.send(JSON.stringify({ type: "rename_session", id, title: t })); }
+          if (r.dataset.a === "save") { const t = input.value.trim(); if (t) wsend({ type: "rename_session", id, title: t }); }
           s.remove();
         });
       }
@@ -922,7 +931,7 @@
           list.map((m) => `<div class="srow" data-m="${esc(m.id || m.model || "")}"><span class="ic">${icon("cpu", 20)}</span><div>${esc(m.displayName || m.name || m.id)}</div></div>`).join("") +
           `<div class="srow" data-m=""><span class="ic">${icon("x", 20)}</span><div>Close</div></div>`;
         screenEl.appendChild(s);
-        s.querySelectorAll(".srow").forEach((r) => r.onclick = () => { const id = r.dataset.m; if (id) ws.send(JSON.stringify({ type: "set_model", model: id })); s.remove(); });
+        s.querySelectorAll(".srow").forEach((r) => r.onclick = () => { const id = r.dataset.m; if (id) wsend({ type: "set_model", model: id }); s.remove(); });
         s.addEventListener("click", (e) => { if (e.target === s) s.remove(); });
       }
 
@@ -943,23 +952,34 @@
 
         const mic = document.getElementById("mic");
         if (!meta.stt) { mic.onclick = () => setStatus("Voice not configured — use the keyboard"); return; }
-        const start = async (e) => { e.preventDefault();
-          try { const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        let micStream = null, micCancelled = false;
+        const stopTracks = () => { if (micStream) { micStream.getTracks().forEach((t) => t.stop()); micStream = null; } };
+        const start = async (e) => {
+          e.preventDefault(); micCancelled = false;
+          try {
+            const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+            if (micCancelled) { stream.getTracks().forEach((t) => t.stop()); return; } // released before ready
+            micStream = stream;
             recMime = MediaRecorder.isTypeSupported("audio/webm") ? "audio/webm" : "";
             recorder = new MediaRecorder(stream, recMime ? { mimeType: recMime } : undefined);
             chunks = []; recorder.ondataavailable = (ev) => ev.data.size && chunks.push(ev.data);
-            recorder.onstop = sendAudio; recorder.start(); mic.classList.add("rec"); setStatus("Listening… release"); }
-          catch { setStatus("Mic denied"); } };
-        const stop = (e) => { e && e.preventDefault(); mic.classList.remove("rec"); if (recorder && recorder.state !== "inactive") recorder.stop(); };
+            recorder.onstop = () => { stopTracks(); sendAudio(); };
+            recorder.start(); mic.classList.add("rec"); setStatus("Listening… release");
+          } catch { setStatus("Mic denied"); stopTracks(); }
+        };
+        const stop = (e) => {
+          e && e.preventDefault(); micCancelled = true; mic.classList.remove("rec");
+          if (recorder && recorder.state !== "inactive") recorder.stop(); else stopTracks();
+        };
         mic.addEventListener("pointerdown", start); mic.addEventListener("pointerup", stop); mic.addEventListener("pointerleave", stop);
       }
       async function sendAudio() {
         const blob = new Blob(chunks, { type: recMime || "audio/webm" });
         const buf = new Uint8Array(await blob.arrayBuffer()); let bin = ""; for (const b of buf) bin += String.fromCharCode(b);
         setStatus("Transcribing…");
-        ws.send(JSON.stringify({ type: "audio_start", mime: recMime || "audio/webm" }));
-        ws.send(JSON.stringify({ type: "audio_chunk", data: btoa(bin) }));
-        ws.send(JSON.stringify({ type: "audio_end" }));
+        wsend({ type: "audio_start", mime: recMime || "audio/webm" });
+        wsend({ type: "audio_chunk", data: btoa(bin) });
+        wsend({ type: "audio_end" });
       }
       const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
 
@@ -975,25 +995,47 @@
         await minSplash;
         buzz([18, 40, 24]); // gentle double-tap as the splash releases
         dir = "fade"; showPairing();
-        deviceCode = dc.device_code;
-        document.getElementById("qr").innerHTML = '<img src="' + dc.qr_data_url + '">';
-        document.getElementById("uc").textContent = dc.user_code;
+        applyDeviceCode(dc);
         startPolling(dc.interval);
+      }
+      function applyDeviceCode(dc) {
+        deviceCode = dc.device_code;
+        const qr = document.getElementById("qr"); if (qr) qr.innerHTML = '<img src="' + dc.qr_data_url + '">';
+        const uc = document.getElementById("uc"); if (uc) uc.textContent = dc.user_code;
+      }
+      // Fetch a fresh device code and restart pairing (e.g. after the old one expires).
+      async function renewPairing() {
+        try {
+          const dc = await (await fetch("/device/code", { method: "POST" })).json();
+          applyDeviceCode(dc); startPolling(dc.interval);
+        } catch { /* offline; user can Restart */ }
       }
       function startPolling(intervalS) {
         clearInterval(pollTimer);
         pollTimer = setInterval(async () => {
-          const r = await fetch("/device/token", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ device_code: deviceCode }) });
-          const data = await r.json();
-          if (data.status === "approved") { clearInterval(pollTimer); token = data.access_token; connect(); }
-          else if (data.status === "expired_token") { clearInterval(pollTimer); showPairing(); }
+          try {
+            const r = await fetch("/device/token", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ device_code: deviceCode }) });
+            const data = await r.json();
+            if (data.status === "approved") { clearInterval(pollTimer); token = data.access_token; connect(); }
+            else if (data.status === "expired_token") { clearInterval(pollTimer); showPairing(); renewPairing(); }
+          } catch { /* transient network error; keep polling */ }
         }, (intervalS || 3) * 1000);
       }
+      // Guarded send — never throws on a closed/absent socket.
+      function wsend(obj) { try { if (ws && ws.readyState === 1) ws.send(JSON.stringify(obj)); } catch {} }
+      let reconnectTimer = null, wasOpen = false;
       function connect() {
         const proto = location.protocol === "https:" ? "wss" : "ws";
         ws = new WebSocket(proto + "://" + location.host + "/ws");
-        ws.onopen = () => ws.send(JSON.stringify({ type: "auth", token }));
-        ws.onmessage = (ev) => handle(JSON.parse(ev.data));
+        ws.onopen = () => { wasOpen = true; setConn(true); wsend({ type: "auth", token }); };
+        ws.onmessage = (ev) => { let m; try { m = JSON.parse(ev.data); } catch { return; } try { handle(m); } catch (e) { /* keep the stream alive */ } };
+        ws.onclose = () => { setConn(false); scheduleReconnect(); };
+        ws.onerror = () => { setConn(false); };
+      }
+      function setConn(on) { const d = document.querySelector(".topbar .dot"); if (d) d.classList.toggle("on", on); }
+      function scheduleReconnect() {
+        if (!token || reconnectTimer) return;   // only after we've paired
+        reconnectTimer = setTimeout(() => { reconnectTimer = null; if (!ws || ws.readyState > 1) connect(); }, 2500);
       }
       function handle(m) {
         switch (m.type) {
@@ -1027,8 +1069,8 @@
           case "watch_action": watchAction(m); break;
           case "watch_query": watchQuery(m); break;
           // Session management results:
-          case "session_renamed": toast("Renamed"); ws.send(JSON.stringify({ type: "list", scope: "chats" })); break;
-          case "session_deleted": toast("Deleted"); ws.send(JSON.stringify({ type: "list", scope: "chats" })); break;
+          case "session_renamed": toast("Renamed"); wsend({ type: "list", scope: "chats" }); break;
+          case "session_deleted": toast("Deleted"); wsend({ type: "list", scope: "chats" }); break;
           // Account & settings:
           case "account_result": fillAccount(m.account); break;
           case "settings_result": {
