@@ -53,6 +53,9 @@ export class UserSession {
     this.foreground = true;
     this.clearIdle();
     this.flush(); // catch the reopened app up on anything it missed
+    // Re-sync the CLI after a transport gap so any pending confirmation the loop
+    // is blocked on is redelivered to us (reinitialize).
+    void this.claude?.reinitialize();
   }
 
   /** Socket dropped (app backgrounded/closed). Keep Claude running. */
@@ -92,7 +95,8 @@ export class UserSession {
     // a long streamed answer can't flood the buffer and evict real events.
     const transient =
       ev.type === "stream_start" || ev.type === "stream_delta" ||
-      ev.type === "stream_end" || ev.type === "stream_filter" || ev.type === "progress";
+      ev.type === "stream_end" || ev.type === "stream_filter" ||
+      ev.type === "progress" || ev.type === "watch_query";
 
     if (this.live()) this.wsSend(ev);
     else if (!transient) {
@@ -137,6 +141,8 @@ export class UserSession {
       promptSuggestions: config.promptSuggestions,
       agentProgress: config.agentProgress,
       watchGuidance: config.watchGuidance,
+      watchTools: config.watchTools,
+      skills: config.skills === "all" ? "all" : config.skills ? config.skills.split(",").map((s) => s.trim()).filter(Boolean) : undefined,
       mcpServers: mcpServers(),
       disallowedTools: config.disallowedTools,
       sandbox: config.sandbox,

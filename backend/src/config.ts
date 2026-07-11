@@ -75,6 +75,11 @@ export const config = {
   // SessionStart hook that tells Claude to keep answers short and glanceable
   // (it's driving a small round watch screen). Disable with WATCH_GUIDANCE=false.
   watchGuidance: bool(process.env.WATCH_GUIDANCE, true),
+  // Give Claude in-process tools to act on the watch (vibrate/notify/timer/health/
+  // location). This is what makes the watch an agent surface, not just a terminal.
+  watchTools: bool(process.env.WATCH_TOOLS, true),
+  // Enable SKILL.md skills (e.g. pdf, docx). "all" | comma-list | "" (off).
+  skills: process.env.SKILLS || "",
 
   // "Connect Claude" page: paste your `claude setup-token` credential once instead
   // of setting it as an env var. Optional ADMIN_SECRET gates who may set it.

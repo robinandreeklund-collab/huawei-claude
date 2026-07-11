@@ -168,8 +168,60 @@
         background: var(--surface); border: 1px solid var(--border); border-radius: 14px; padding: .6rem .8rem;
         font-size: .82rem; color: var(--ink); animation: fadeUp .22s var(--ease); }
 
+      /* --- Watch actions: notification, timer, sensor, context menu --- */
+      .notif { position: absolute; top: 46px; left: 20px; right: 20px; z-index: 12; display: flex; gap: .6rem;
+        align-items: center; background: linear-gradient(135deg, #34322f, #262624);
+        border: 1px solid var(--border); border-radius: 20px; padding: .7rem .85rem;
+        box-shadow: 0 14px 34px rgba(0,0,0,.55); animation: notifIn .42s var(--spring) both; }
+      .notif.out { animation: notifOut .32s var(--ease) forwards; }
+      .notif .spark { color: var(--clay); flex: 0 0 auto; }
+      .notif .tx { min-width: 0; }
+      .notif .t { font-size: .86rem; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+      .notif .b { font-size: .74rem; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+      @keyframes notifIn { from { opacity: 0; transform: translateY(-130%) scale(.9); } to { opacity: 1; transform: none; } }
+      @keyframes notifOut { to { opacity: 0; transform: translateY(-130%) scale(.9); } }
+
+      .timerwrap { position: absolute; inset: 0; z-index: 11; display: grid; place-items: center;
+        background: radial-gradient(circle at 50% 45%, rgba(38,38,36,.86), rgba(20,19,17,.94));
+        backdrop-filter: blur(2px); animation: fade .2s ease; }
+      .timerwrap.done .tnum { color: var(--clay); animation: tPulse .5s var(--ease) 3; }
+      .timerring { position: relative; width: 200px; height: 200px; }
+      .timerring svg { transform: rotate(-90deg); }
+      .timerring .trk { fill: none; stroke: var(--surface-2); stroke-width: 5; }
+      .timerring .arc { fill: none; stroke: var(--clay); stroke-width: 5; stroke-linecap: round;
+        stroke-dasharray: 596; stroke-dashoffset: 0; }
+      .tmid { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: .1rem; }
+      .tnum { font-size: 2.4rem; font-weight: 600; font-variant-numeric: tabular-nums; }
+      .tlabel { font-size: .78rem; color: var(--muted); max-width: 8rem; text-align: center; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+      .tdismiss { position: absolute; bottom: 60px; left: 50%; transform: translateX(-50%);
+        background: var(--surface-2); border: 1px solid var(--border); color: var(--ink);
+        border-radius: 999px; padding: .4rem 1.1rem; font-size: .8rem; cursor: pointer; z-index: 2; }
+      @keyframes tPulse { 0%,100% { transform: scale(1); } 50% { transform: scale(1.12); } }
+
+      .sensor { align-self: flex-start; display: inline-flex; align-items: center; gap: .45rem;
+        background: var(--surface); border: 1px solid var(--border); border-radius: 999px;
+        padding: .4rem .7rem; font-size: .78rem; color: var(--ink); animation: fadeUp .24s var(--spring); }
+      .sensor .hb { color: #e0806a; animation: heart 1s ease-in-out infinite; }
+      @keyframes heart { 0%,100% { transform: scale(1); } 30% { transform: scale(1.28); } }
+
+      .ctxmenu { position: absolute; z-index: 14; background: var(--surface-2); border: 1px solid var(--border);
+        border-radius: 16px; padding: .3rem; box-shadow: 0 16px 40px rgba(0,0,0,.6); min-width: 9.5rem;
+        animation: ctxIn .18s var(--spring) both; transform-origin: top center; }
+      @keyframes ctxIn { from { opacity: 0; transform: scale(.86); } to { opacity: 1; transform: none; } }
+      .ctxmenu .ci { display: flex; align-items: center; gap: .55rem; padding: .55rem .7rem; border-radius: 11px;
+        font-size: .86rem; color: var(--ink); cursor: pointer; }
+      .ctxmenu .ci:active { background: var(--clay-tint); }
+      .ctxmenu .ci.danger { color: var(--err); } .ctxmenu .ci.danger .ic { color: var(--err); }
+      .ctxmenu .ci .ic { color: var(--clay); display: grid; place-items: center; }
+
+      .ripple { position: absolute; z-index: 20; width: 12px; height: 12px; border-radius: 50%;
+        background: var(--clay); pointer-events: none; transform: translate(-50%, -50%);
+        animation: rip .5s var(--ease) forwards; }
+      @keyframes rip { from { opacity: .5; transform: translate(-50%,-50%) scale(1); }
+        to { opacity: 0; transform: translate(-50%,-50%) scale(9); } }
+
       /* --- Motion & polish --- */
-      :root { --ease: cubic-bezier(.22,.61,.36,1); }
+      :root { --ease: cubic-bezier(.22,.61,.36,1); --spring: cubic-bezier(.34,1.56,.64,1); }
       @keyframes slideFwd { from { opacity: 0; transform: translateX(26px); } to { opacity: 1; transform: none; } }
       @keyframes slideBack { from { opacity: 0; transform: translateX(-26px); } to { opacity: 1; transform: none; } }
       @keyframes fadeUp { from { opacity: 0; transform: translateY(9px); } to { opacity: 1; transform: none; } }
@@ -271,6 +323,14 @@
           case "gauge": return `<svg ${s}><path d="M4.5 15a7.5 7.5 0 0 1 15 0"/><line x1="12" y1="15" x2="15" y2="10.5"/></svg>`;
           case "undo": return `<svg ${s}><polyline points="8 6 4 10 8 14"/><path d="M4 10h9a5 5 0 0 1 0 10h-3"/></svg>`;
           case "plan": return `<svg ${s}><path d="M9 4h6a1 1 0 0 1 1 1v0a1 1 0 0 1-1 1H9A1 1 0 0 1 8 5v0a1 1 0 0 1 1-1z"/><path d="M8 5H6a1 1 0 0 0-1 1v13a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1V6a1 1 0 0 0-1-1h-2"/><polyline points="9 12 11 14 15 10"/></svg>`;
+          case "bell": return `<svg ${s}><path d="M6 9a6 6 0 0 1 12 0c0 5 2 6 2 6H4s2-1 2-6z"/><path d="M10.5 19a1.5 1.5 0 0 0 3 0"/></svg>`;
+          case "clock": return `<svg ${s}><circle cx="12" cy="12" r="8"/><polyline points="12 8 12 12 15 14"/></svg>`;
+          case "heart": return `<svg ${s}><path d="M12 20s-7-4.6-7-10a4 4 0 0 1 7-2.6A4 4 0 0 1 19 10c0 5.4-7 10-7 10z"/></svg>`;
+          case "pin": return `<svg ${s}><path d="M12 21s6-5.4 6-10a6 6 0 0 0-12 0c0 4.6 6 10 6 10z"/><circle cx="12" cy="11" r="2.2"/></svg>`;
+          case "cpu": return `<svg ${s}><rect x="7" y="7" width="10" height="10" rx="2"/><path d="M10 3v2M14 3v2M10 19v2M14 19v2M3 10h2M3 14h2M19 10h2M19 14h2"/></svg>`;
+          case "edit": return `<svg ${s}><path d="M4 20h4L18.5 9.5a2 2 0 0 0-2.8-2.8L5 17.2z"/><line x1="14" y1="8" x2="17" y2="11"/></svg>`;
+          case "trash": return `<svg ${s}><polyline points="4 7 20 7"/><path d="M6 7l1 12a2 2 0 0 0 2 2h6a2 2 0 0 0 2-2l1-12"/><path d="M9.5 7V5a1.5 1.5 0 0 1 1.5-1.5h2A1.5 1.5 0 0 1 14.5 5v2"/></svg>`;
+          case "branch": return `<svg ${s}><circle cx="7" cy="6" r="2.2"/><circle cx="7" cy="18" r="2.2"/><circle cx="17" cy="9" r="2.2"/><path d="M7 8v8M7 12h5a3 3 0 0 0 3-3"/></svg>`;
         }
         return "";
       }
@@ -385,6 +445,12 @@
       }
       function press() { if (nav.mode === "select") nav.focusables[nav.idx]?.click(); }
       document.getElementById("screen").addEventListener("wheel", (e) => { e.preventDefault(); rotate(e.deltaY); }, { passive: false });
+      // Silky tactile ripple on any interactive tap.
+      screenEl.addEventListener("pointerdown", (e) => {
+        if (e.target.closest(".card, .cbtn, .chip, .pill, .srow, .ci, .cbtn, .stopbtn, .topmenu, .navttl")) {
+          const b = screenEl.getBoundingClientRect(); rippleAt(e.clientX - b.left, e.clientY - b.top);
+        }
+      });
       const crown = document.getElementById("crown");
       crown.addEventListener("click", () => { crown.classList.add("pulse"); setTimeout(() => crown.classList.remove("pulse"), 160); press(); });
       document.getElementById("crownBack").addEventListener("click", () => back());
@@ -452,7 +518,12 @@
           : (scope === "chats" ? "" : `<div class="empty">Nothing here yet</div>`);
         view.innerHTML = `<div class="wheel">${rows}</div>`;
         const nc = document.getElementById("newChat"); if (nc) nc.onclick = () => ws.send(JSON.stringify({ type: "new_chat" }));
-        view.querySelectorAll("[data-id]").forEach((el) => el.addEventListener("click", () => onPick(scope, decodeURIComponent(el.dataset.id))));
+        view.querySelectorAll("[data-id]").forEach((el, i) => {
+          const id = decodeURIComponent(el.dataset.id);
+          el.addEventListener("click", () => onPick(scope, id));
+          // Chats support long-press → rename / branch / delete.
+          if (scope === "chats") bindLongPress(el, () => openCtx(id, items[i]?.title || ""));
+        });
         registerFocus(); afterRender();
       }
       function onPick(scope, id) {
@@ -606,14 +677,16 @@
           `<div class="srow" data-act="rewind"><span class="ic">${icon("undo", 20)}</span><div>Undo last change<div class="sub">rewind files</div></div></div>`;
         s.innerHTML = `
           <div class="srow tog" data-act="plan" data-on="${planOn ? 1 : 0}"><span class="ic">${icon("plan", 20)}</span><div>Plan mode<div class="sub">${planOn ? "on — reviews before acting" : "off — acts directly"}</div></div></div>
-          <div class="srow" data-act="usage"><span class="ic">${icon("gauge", 20)}</span><div>Context usage<div class="sub">tokens in this session</div></div></div>
+          <div class="srow" data-act="model"><span class="ic">${icon("cpu", 20)}</span><div>Model<div class="sub">pick which model runs</div></div></div>
+          <div class="srow" data-act="usage"><span class="ic">${icon("gauge", 20)}</span><div>Context usage<div class="sub">tokens + plan limits</div></div></div>
           ${undoRow}
           <div class="srow" data-act="close"><span class="ic">${icon("x", 20)}</span><div>Close</div></div>`;
         screenEl.appendChild(s);
         s.querySelectorAll(".srow").forEach((r) => r.onclick = () => {
           const act = r.dataset.act;
           if (act === "plan") { ws.send(JSON.stringify({ type: "plan_mode", on: !planOn })); closeMenu(); }
-          else if (act === "usage") { ws.send(JSON.stringify({ type: "usage" })); toast("Reading context…", 1500); closeMenu(); }
+          else if (act === "model") { ws.send(JSON.stringify({ type: "models" })); closeMenu(); }
+          else if (act === "usage") { ws.send(JSON.stringify({ type: "usage" })); ws.send(JSON.stringify({ type: "plan_usage" })); toast("Reading context…", 1500); closeMenu(); }
           else if (act === "rewind") { ws.send(JSON.stringify({ type: "rewind" })); toast("Undoing…", 1500); closeMenu(); }
           else closeMenu();
         });
@@ -628,6 +701,128 @@
         box.innerHTML = `<div class="usagebox"><b>Context ${pct}%</b> · ${k(u.totalTokens)}/${k(u.maxTokens)}
           <div class="usagebar"><i style="width:${Math.min(100, pct)}%"></i></div></div>`;
         screenEl.appendChild(box); clearTimeout(toastTimer); toastTimer = setTimeout(() => box.remove(), 4000);
+      }
+      function showPlanUsage(u) {
+        if (!u || !u.rate_limits) return;
+        const box = document.getElementById("toast"); if (!box) return;
+        const w = (u.rate_limits.five_hour || u.rate_limits["5h"] || {});
+        const pct = Math.round((w.utilization ?? w.used_fraction ?? 0) * 100);
+        if (!Number.isFinite(pct)) return;
+        const extra = document.createElement("div"); extra.style.marginTop = ".4rem"; extra.style.fontSize = ".76rem"; extra.style.color = "var(--muted)";
+        extra.textContent = `Plan (5h): ${pct}% used`;
+        box.querySelector(".usagebox")?.appendChild(extra);
+      }
+
+      // --- Claude ACTS on the watch: vibrate / notify / timer / sensors ---
+      function watchAction(m) {
+        if (m.action === "vibrate") { const map = { short: 24, double: [18, 40, 24], long: [320] }; buzz(map[m.pattern] || 24); rippleCenter(); }
+        else if (m.action === "notify") { showNotif(m.title, m.body); buzz([18, 40, 24]); }
+        else if (m.action === "timer") { startTimer(m.seconds, m.label); }
+      }
+      function watchQuery(m) {
+        let data;
+        if (m.kind === "location") { data = { lat: 59.334, lon: 18.063, place: "Stockholm, SE" }; sensorPill("pin", "Stockholm, SE"); }
+        else { const hr = 62 + Math.floor(Math.random() * 26), steps = 3500 + Math.floor(Math.random() * 4200); data = { heartRate: hr, steps }; sensorPill("heart", `${hr} bpm · ${steps.toLocaleString()} steps`); }
+        if (ws && ws.readyState === 1) ws.send(JSON.stringify({ type: "watch_reply", id: m.id, data })); buzz(12);
+      }
+      function sensorPill(ic, text) {
+        const feed = document.getElementById("feed"); if (!feed) return;
+        const w = document.createElement("div"); w.className = "mrow in";
+        const glyph = ic === "heart" ? `<span class="hb">${icon("heart", 15)}</span>` : `<span style="color:var(--clay);display:grid;place-items:center">${icon(ic, 15)}</span>`;
+        w.innerHTML = `<span class="sensor">${glyph} Claude read ${esc(text)}</span>`;
+        feed.appendChild(w); feed.scrollTop = feed.scrollHeight;
+      }
+      function showNotif(title, body) {
+        const old = document.getElementById("notif"); if (old) old.remove();
+        const n = document.createElement("div"); n.className = "notif"; n.id = "notif";
+        n.innerHTML = `<span class="spark">${burst(24)}</span><div class="tx"><div class="t">${esc(title || "Claude")}</div>${body ? `<div class="b">${esc(body)}</div>` : ""}</div>`;
+        screenEl.appendChild(n);
+        const kill = () => { n.classList.add("out"); setTimeout(() => n.remove(), 320); };
+        n.onclick = kill; clearTimeout(n._t); n._t = setTimeout(kill, 4200);
+      }
+      let timerRaf = 0, timerEnd = 0;
+      function startTimer(seconds, label) {
+        stopTimer();
+        const total = Math.max(1, seconds | 0);
+        const wrap = document.createElement("div"); wrap.className = "timerwrap"; wrap.id = "timerwrap";
+        wrap.innerHTML = `<div class="timerring"><svg width="200" height="200" viewBox="0 0 200 200"><circle class="trk" cx="100" cy="100" r="95"/><circle class="arc" id="tarc" cx="100" cy="100" r="95"/></svg><div class="tmid"><div class="tnum" id="tnum">${fmtTime(total)}</div><div class="tlabel">${esc(label || "Timer")}</div></div></div><button class="tdismiss" id="tdismiss">Dismiss</button>`;
+        screenEl.appendChild(wrap);
+        document.getElementById("tdismiss").onclick = stopTimer;
+        const arc = document.getElementById("tarc"), C = 2 * Math.PI * 95; arc.style.strokeDasharray = C.toFixed(1);
+        timerEnd = performance.now() + total * 1000;
+        const tick = () => {
+          const remMs = timerEnd - performance.now(), rem = Math.max(0, remMs / 1000);
+          const n = document.getElementById("tnum"); if (n) n.textContent = fmtTime(Math.ceil(rem));
+          arc.style.strokeDashoffset = (C * (1 - rem / total)).toFixed(1);
+          if (remMs <= 0) return timerDone(label);
+          timerRaf = requestAnimationFrame(tick);
+        };
+        tick(); buzz(20);
+      }
+      function fmtTime(s) { const m = Math.floor(s / 60), ss = s % 60; return m ? `${m}:${String(ss).padStart(2, "0")}` : String(ss); }
+      function timerDone(label) { const w = document.getElementById("timerwrap"); if (w) { w.classList.add("done"); const n = document.getElementById("tnum"); if (n) n.textContent = "0"; } buzz([320, 120, 320]); showNotif("Timer done", label || ""); setTimeout(stopTimer, 2600); }
+      function stopTimer() { if (timerRaf) cancelAnimationFrame(timerRaf); timerRaf = 0; const w = document.getElementById("timerwrap"); if (w) w.remove(); }
+
+      function rippleAt(x, y) { const r = document.createElement("div"); r.className = "ripple"; r.style.left = x + "px"; r.style.top = y + "px"; screenEl.appendChild(r); setTimeout(() => r.remove(), 520); }
+      function rippleCenter() { const b = screenEl.getBoundingClientRect(); rippleAt(b.width / 2, b.height / 2); }
+
+      // --- Long-press context menu on a chat (rename / delete / branch) ---
+      function bindLongPress(el, cb) {
+        let t = null;
+        const down = (e) => { t = setTimeout(() => { t = null; cb(e); }, 480); };
+        const cancel = () => { if (t) { clearTimeout(t); t = null; } };
+        el.addEventListener("pointerdown", down);
+        el.addEventListener("pointerup", cancel);
+        el.addEventListener("pointermove", cancel);
+        el.addEventListener("pointerleave", cancel);
+      }
+      function openCtx(id, title) {
+        closeCtx();
+        const m = document.createElement("div"); m.className = "ctxmenu"; m.id = "ctxmenu";
+        m.style.left = "34px"; m.style.top = "70px"; m.style.right = "34px";
+        m.innerHTML = `
+          <div class="ci" data-a="rename"><span class="ic">${icon("edit", 18)}</span>Rename</div>
+          <div class="ci" data-a="branch"><span class="ic">${icon("branch", 18)}</span>Branch</div>
+          <div class="ci danger" data-a="delete"><span class="ic">${icon("trash", 18)}</span>Delete</div>`;
+        screenEl.appendChild(m); buzz(16);
+        m.querySelectorAll(".ci").forEach((r) => r.onclick = (e) => {
+          e.stopPropagation(); const a = r.dataset.a; closeCtx();
+          if (a === "rename") renamePrompt(id, title);
+          else if (a === "delete") ws.send(JSON.stringify({ type: "delete_session", id }));
+          else if (a === "branch") ws.send(JSON.stringify({ type: "branch_session", id }));
+        });
+        setTimeout(() => document.addEventListener("pointerdown", closeCtxOnce, { once: true }), 0);
+      }
+      function closeCtx() { const m = document.getElementById("ctxmenu"); if (m) m.remove(); }
+      function closeCtxOnce(e) { if (!e.target.closest(".ctxmenu")) closeCtx(); }
+      function renamePrompt(id, current) {
+        const s = document.createElement("div"); s.className = "sheet"; s.id = "sheet";
+        s.innerHTML = `<div style="width:100%;text-align:center;color:var(--muted);font-size:.82rem;margin-bottom:.2rem">Rename chat</div>
+          <input id="rnInput" value="${esc(current || "")}" style="width:100%;background:var(--bg);border:1px solid var(--border);color:var(--ink);border-radius:13px;padding:.7rem .8rem;font-size:.95rem;outline:none" />
+          <div class="srow" data-a="save" style="justify-content:center"><span class="ic">${icon("check", 18)}</span>Save</div>
+          <div class="srow" data-a="cancel" style="justify-content:center"><span class="ic">${icon("x", 18)}</span>Cancel</div>`;
+        screenEl.appendChild(s);
+        const input = document.getElementById("rnInput"); input.focus();
+        s.querySelectorAll(".srow").forEach((r) => r.onclick = () => {
+          if (r.dataset.a === "save") { const t = input.value.trim(); if (t) ws.send(JSON.stringify({ type: "rename_session", id, title: t })); }
+          s.remove();
+        });
+      }
+
+      // --- Model picker (supportedModels) ---
+      function showModelPicker(models) {
+        const list = (models && models.length) ? models : [
+          { id: "claude-haiku-4-5-20251001", displayName: "Haiku 4.5 (fast)" },
+          { id: "claude-sonnet-5", displayName: "Sonnet 5" },
+          { id: "claude-opus-4-8", displayName: "Opus 4.8" },
+        ];
+        const s = document.createElement("div"); s.className = "sheet"; s.id = "sheet";
+        s.innerHTML = `<div style="width:100%;text-align:center;color:var(--muted);font-size:.82rem">Choose model</div>` +
+          list.map((m) => `<div class="srow" data-m="${esc(m.id || m.model || "")}"><span class="ic">${icon("cpu", 20)}</span><div>${esc(m.displayName || m.name || m.id)}</div></div>`).join("") +
+          `<div class="srow" data-m=""><span class="ic">${icon("x", 20)}</span><div>Close</div></div>`;
+        screenEl.appendChild(s);
+        s.querySelectorAll(".srow").forEach((r) => r.onclick = () => { const id = r.dataset.m; if (id) ws.send(JSON.stringify({ type: "set_model", model: id })); s.remove(); });
+        s.addEventListener("click", (e) => { if (e.target === s) s.remove(); });
       }
 
       function wireChat() {
@@ -716,9 +911,17 @@
           case "turn_done": hideTyping(); setRunning(false); setStatus(""); speak(pendingAI.trim()); pendingAI = ""; buzz([16, 40, 22]); break;
           case "stopped": setRunning(false); hideTyping(); setStatus(""); break;
           case "plan_mode": planOn = Boolean(m.on); applyPlanClass(); toast(planOn ? "Plan mode on" : "Plan mode off"); break;
-          case "model_set": toast("Model: " + (m.model || "default")); break;
+          case "model_set": toast("Model: " + ((m.model || "default").replace(/^claude-|-\d+$/g, "").replace(/-/g, " "))); break;
           case "usage_result": showUsage(m.usage); break;
+          case "plan_usage_result": showPlanUsage(m.usage); break;
+          case "models_result": showModelPicker(m.models); break;
           case "rewind_result": toast(m.ok ? `Undid last change${m.files ? " · " + m.files + " files" : ""}` : "Nothing to undo" + (m.error ? " (" + m.error + ")" : "")); break;
+          // Claude acting on the watch:
+          case "watch_action": watchAction(m); break;
+          case "watch_query": watchQuery(m); break;
+          // Session management results:
+          case "session_renamed": toast("Renamed"); ws.send(JSON.stringify({ type: "list", scope: "chats" })); break;
+          case "session_deleted": toast("Deleted"); ws.send(JSON.stringify({ type: "list", scope: "chats" })); break;
           case "stt_unavailable": hideTyping(); setRunning(false); bubble("ai", "Voice is not configured on the server.", { filtered: true }); break;
           case "error": hideTyping(); setRunning(false); bubble("ai", "Error: " + m.message, { filtered: true }); break;
         }

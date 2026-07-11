@@ -116,6 +116,8 @@ svarar servern `stt_unavailable` och klienten faller tillbaka på textinmatning.
 | `PROMPT_SUGGESTIONS` | `true` | Modellförslag som quick-replies |
 | `AGENT_PROGRESS` | `true` | Progress-summeringar (statusrad + push-text) |
 | `WATCH_GUIDANCE` | `true` | SessionStart-hook: korta, glanceable svar |
+| `WATCH_TOOLS` | `true` | Ger Claude verktyg att agera på klockan (vibrera/notis/timer/hälsa/plats) |
+| `SKILLS` | — | Aktivera SKILL.md-skills: `all` eller komma-lista |
 | `DATA_DIR` | — | Persistent bas för historik/token (överlever omstart) |
 | `DISALLOWED_TOOLS` | — | Verktyg att ta bort helt (komma-sep.) |
 | `SANDBOX` | `false` | Isolerad kommandokörning (bubblewrap) |
@@ -156,7 +158,13 @@ Klient → server:
 { "type": "plan_mode", "on": true }      // planera utan att köra (read-only)
 { "type": "set_model", "model": "claude-sonnet-5" }
 { "type": "usage" }                      // begär kontext-användning
+{ "type": "plan_usage" }                 // begär plan-rate-limits (5h/7d)
 { "type": "rewind" }                     // ångra senaste ändring (checkpointing)
+{ "type": "models" }                     // hämta modell-lista (picker)
+{ "type": "watch_reply", "id": "w1", "data": { } }  // svar på watch_query (sensor)
+{ "type": "rename_session", "id": "…", "title": "Nytt namn" }
+{ "type": "delete_session", "id": "…" }
+{ "type": "branch_session", "id": "…" }  // grena en chatt (forkSession)
 ```
 Server → klient: `authed` (`consented`, `demoMode`, `planMode`) · `needs_consent` ·
 `consented` · `accepted` · `stream_start` / `stream_delta` (`text`) / `stream_end` /
@@ -164,9 +172,12 @@ Server → klient: `authed` (`consented`, `demoMode`, `planMode`) · `needs_cons
 ev. `filtered`) · `tool_use` · `progress` (`text`; live summering) · `suggestion`
 (`text`; modellens nästa-prompt) · `needs_confirmation` (`id`, `tool`, `command`) ·
 `history` (`items[{role,text}]`; historik-replay) · `stopped` · `plan_mode` (`on`) ·
-`model_set` · `usage_result` (`usage`) · `rewind_result` (`ok`, `files`) ·
-`transcribing` · `transcript` · `stt_unavailable` · `reported` · `result` (kostnad) ·
-`turn_done` · `error`.
+`model_set` · `usage_result` (`usage`) · `plan_usage_result` (`usage`) ·
+`models_result` (`models`) · `rewind_result` (`ok`, `files`) · `watch_action`
+(`action`: vibrate/notify/timer — Claude agerar på klockan) · `watch_query`
+(`id`, `kind`: health/location — begär sensor-värde) · `session_renamed` /
+`session_deleted` · `transcribing` · `transcript` · `stt_unavailable` · `reported` ·
+`result` (kostnad) · `turn_done` · `error`.
 
 Svaret streamas token-för-token (`includePartialMessages` i Agent SDK). Moderering
 körs på den växande texten så ett flaggat stycke stoppas mitt i streamen
@@ -214,6 +225,19 @@ Byggt enligt [`../docs/sdk-analys.md`](../docs/sdk-analys.md):
 - **Härdning** — `SANDBOX`, `DISALLOWED_TOOLS`.
 - **Ångra** — `enableFileCheckpointing` + `rewindFiles()` (Undo last change).
 - **Watch-hook** — SessionStart-hook håller svaren korta/glanceable.
+
+### Nivå 4 — Claude agerar på klockan
+- **Egna verktyg** (`createSdkMcpServer` + `tool()`) — in-process MCP-server `watch`
+  ger Claude verktyg: `vibrate`, `notify`, `set_timer`, `read_health`, `get_location`.
+  Action-verktyg pushar `watch_action` till klockan; sensor-verktyg gör en round-trip
+  (`watch_query` → klockan svarar med `watch_reply`). På enheten mappar de till
+  Sensor/Vibrator/Notification Kit (`../docs/ondevice-notifications.md`).
+- **Robust återanslutning** — `reinitialize()` vid attach → väntande bekräftelser
+  levereras om efter bakgrund/glapp.
+- **Sessionshantering** — `renameSession`/`deleteSession`/`forkSession` via long-press
+  på en chatt (Rename / Branch / Delete).
+- **Modellväljare** — `supportedModels()` → picker i menyn (`set_model`).
+- **Plan-gränser** — `usage_EXPERIMENTAL…()` → 5h/7d-fönster i kontextkortet.
 
 ## Deploya till Google Cloud Run
 

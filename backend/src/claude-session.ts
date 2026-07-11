@@ -19,6 +19,7 @@ import {
 } from "@anthropic-ai/claude-agent-sdk";
 import { moderate, FILTERED_NOTICE } from "./moderation.js";
 import { spawnEnv } from "./claude-cred.js";
+import { createWatchToolServer } from "./watch-tools.js";
 
 type Emit = (event: Record<string, unknown>) => void;
 
@@ -57,6 +58,10 @@ interface SessionOpts {
   settingSources?: ("user" | "project" | "local")[];
   /** Inject a SessionStart hint to keep answers short/glanceable for the watch. */
   watchGuidance?: boolean;
+  /** Give Claude tools to act on the watch (vibrate/notify/timer/health/location). */
+  watchTools?: boolean;
+  /** Enable SKILL.md skills: 'all' or a list of skill names. */
+  skills?: string[] | "all";
   /** Called with the per-turn cost so the server can enforce a budget cap. */
   onCost?: (usd: number) => void;
   /** Called when moderation filters a message, for the report log. */
@@ -107,6 +112,12 @@ class MessageQueue<T> implements AsyncIterable<T> {
 const DANGEROUS = /\b(git\s+push|rm\s+-rf|curl|wget|npm\s+publish)\b/;
 const CONFIRM_TIMEOUT_MS = 2 * 60 * 1000;
 
+// Used only if the watch never answers a sensor query (offline/backgrounded).
+function fallbackReading(kind: string): Record<string, unknown> {
+  if (kind === "location") return { lat: 59.33, lon: 18.06, place: "Stockholm", simulated: true };
+  return { heartRate: 72, steps: 4200, simulated: true };
+}
+
 // Injected via a SessionStart hook so it applies to every surface (chats, projects,
 // code) without disturbing a Project's own systemPrompt.
 const WATCH_GUIDANCE =
@@ -135,6 +146,9 @@ export class ClaudeSession {
   // Pending phone confirmations for dangerous tool calls (spec §7).
   private pendingConfirm = new Map<string, (allow: boolean) => void>();
   private confirmSeq = 0;
+  // Pending watch data queries (read_health / get_location round-trips).
+  private pendingQuery = new Map<string, (data: unknown) => void>();
+  private querySeq = 0;
 
   constructor(
     private readonly emit: Emit,
@@ -179,9 +193,33 @@ export class ClaudeSession {
     }
   }
 
+  // Ask the watch for a sensor value (read_health / get_location), falling back to
+  // a simulated reading if the watch doesn't answer in time.
+  private queryWatch = (kind: string): Promise<unknown> =>
+    new Promise((resolve) => {
+      const id = `w${++this.querySeq}`;
+      this.pendingQuery.set(id, resolve);
+      this.emit({ type: "watch_query", id, kind });
+      setTimeout(() => {
+        if (this.pendingQuery.delete(id)) resolve(fallbackReading(kind));
+      }, 8000);
+    });
+
+  /** Resolve a pending watch data query with the value the watch reported. */
+  resolveQuery(id: string, data: unknown): void {
+    const r = this.pendingQuery.get(id);
+    if (r) {
+      this.pendingQuery.delete(id);
+      r(data);
+    }
+  }
+
   private start(): void {
     this.started = true;
     const o = this.opts;
+    // Merge user-configured MCP servers with the in-process "watch" tool server.
+    const mcp: Record<string, unknown> = { ...(o.mcpServers ?? {}) };
+    if (o.watchTools) mcp.watch = createWatchToolServer(this.emit, this.queryWatch);
     this.q = query({
       prompt: this.queue,
       options: {
@@ -194,13 +232,12 @@ export class ClaudeSession {
         ...(o.maxTurns ? { maxTurns: o.maxTurns } : {}),
         ...(o.maxBudgetUsd ? { maxBudgetUsd: o.maxBudgetUsd } : {}),
         ...(o.taskBudgetTokens ? { taskBudget: { total: o.taskBudgetTokens } } : {}),
-        ...(o.mcpServers && Object.keys(o.mcpServers).length
-          ? { mcpServers: o.mcpServers as never }
-          : {}),
+        ...(Object.keys(mcp).length ? { mcpServers: mcp as never } : {}),
         ...(o.disallowedTools?.length ? { disallowedTools: o.disallowedTools } : {}),
         ...(o.sandbox ? { sandbox: { enabled: true, failIfUnavailable: false } } : {}),
         ...(o.checkpointing ? { enableFileCheckpointing: true } : {}),
         ...(o.settingSources ? { settingSources: o.settingSources } : {}),
+        ...(o.skills ? { skills: o.skills } : {}),
         ...(o.promptSuggestions ? { promptSuggestions: true } : {}),
         ...(o.agentProgress ? { agentProgressSummaries: true } : {}),
         ...(o.watchGuidance ? { hooks: { SessionStart: [watchGuidanceHook] } } : {}),
@@ -325,6 +362,32 @@ export class ClaudeSession {
     }
   }
 
+  /** Claude-plan rate-limit windows (5h / 7d), or null if unavailable / API key. */
+  async planUsage(): Promise<unknown> {
+    try {
+      const q = this.q as unknown as {
+        usage_EXPERIMENTAL_MAY_CHANGE_DO_NOT_RELY_ON_THIS_API_YET?: () => Promise<unknown>;
+      } | null;
+      return (await q?.usage_EXPERIMENTAL_MAY_CHANGE_DO_NOT_RELY_ON_THIS_API_YET?.()) ?? null;
+    } catch {
+      return null;
+    }
+  }
+
+  /** Available models for a picker, or [] if unavailable (no turn started yet). */
+  async models(): Promise<unknown[]> {
+    try {
+      return (await this.q?.supportedModels?.()) ?? [];
+    } catch {
+      return [];
+    }
+  }
+
+  /** Re-send the initialize request after a transport gap; redelivers pending confirmations. */
+  async reinitialize(): Promise<void> {
+    await this.q?.reinitialize?.().catch(() => {});
+  }
+
   /** Undo the file changes from the most recent turn (rewind to last user message). */
   async rewindLast(): Promise<{ ok: boolean; error?: string; files?: number }> {
     if (!this.q || !this.sessionId) return { ok: false, error: "no session" };
@@ -343,6 +406,8 @@ export class ClaudeSession {
   close(): void {
     for (const r of this.pendingConfirm.values()) r(false);
     this.pendingConfirm.clear();
+    for (const r of this.pendingQuery.values()) r({ error: "session closed" });
+    this.pendingQuery.clear();
     this.queue.close();
     this.q?.close?.();
   }

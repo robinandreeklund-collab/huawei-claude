@@ -4,9 +4,11 @@ Genomgång av `@anthropic-ai/claude-agent-sdk` (v0.3.x) mot vår watch-relay, f�
 se vad vi kan lägga till och optimera. **Ingen kod här** — bara analys, värde och
 prioritering. Källa: SDK:ns egna typdefinitioner (`sdk.d.ts`) + runtime-API:t (`Query`).
 
-> **Status:** nivå 1–3 nedan är **implementerade** (se `backend/README.md` →
-> "SDK-funktioner"). MCP, sandbox och persistent disk är inkopplade men avstängda
-> tills man sätter respektive env-var/creds.
+> **Status:** nivå 1–3 nedan är **implementerade**, plus en **nivå 4** (se längst
+> ner) där Claude får verktyg att agera på klockan (vibrera/notis/timer/hälsa/plats),
+> sessionshantering, modellväljare, plan-gränser och robust återanslutning. Se
+> `backend/README.md` → "SDK-funktioner". MCP, sandbox och persistent disk är
+> inkopplade men avstängda tills man sätter respektive env-var/creds.
 
 ---
 
@@ -194,3 +196,37 @@ Motsatsen, för engångsjobb där historik inte behövs (t.ex. demo-turer) → m
 - Sätt `fallbackModel` för färre "overloaded"-fel utan att vi själva retryar.
 - Låt push-notisen använda `agentProgressSummaries` i stället för sista textbiten.
 - `maxTurns` som skyddsnät mot skenande loopar.
+
+---
+
+## 10. Nivå 4 — Claude agerar på klockan (implementerad)
+
+Bortom nivå 1–3: gör klockan till en **agent-yta**, inte bara en terminal.
+
+### 10.1 Egna in-process-verktyg — `createSdkMcpServer` + `tool()` ⭐
+En MCP-server `watch` (i backend, `src/watch-tools.ts`) ger Claude verktyg:
+`vibrate`, `notify`, `set_timer`, `read_health`, `get_location`. Action-verktyg
+pushar en `watch_action` till klockan (buzz/notis/timer-overlay); sensor-verktyg gör
+en round-trip (`watch_query` → klockan svarar `watch_reply`). GUI:t har animerad
+notis-banner, nedräkningsring, sensor-pills. På enheten mappar det till Sensor/
+Vibrator/Notification Kit.
+
+### 10.2 Robust återanslutning — `reinitialize()`
+Anropas vid `attach()` (reconnect) → CLI:t skickar om väntande bekräftelser efter
+bakgrund/transport-glapp. Härdar exakt persistent-session-storyn.
+
+### 10.3 Sessionshantering — `renameSession` / `deleteSession` / `forkSession`
+Long-press på en chatt → animerad kontextmeny: **Rename / Branch / Delete**.
+
+### 10.4 Modellväljare — `supportedModels()`
+Picker i åtgärdsmenyn → `set_model` live.
+
+### 10.5 Plan-gränser — `usage_EXPERIMENTAL…()`
+Claude-planens 5h/7d-fönster visas i kontextkortet (förvarning innan gräns).
+
+### 10.6 Skills — `skills`
+`SKILLS=all` aktiverar SKILL.md-skills (pdf, docx, …).
+
+**Kvar att utforska (ej byggt):** `outputFormat`-kort, egna `agents` +
+`forwardSubagentText`, `resumeSessionAt` (konversations-rewind), `additionalDirectories`
++ 1M-kontext, `sessionStore`, `Query.readFile`, `onElicitation`/`mcpServerStatus`.

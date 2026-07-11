@@ -13,7 +13,13 @@ import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
 import { WebSocketServer, type WebSocket } from "ws";
 import QRCode from "qrcode";
-import { listSessions, getSessionMessages } from "@anthropic-ai/claude-agent-sdk";
+import {
+  listSessions,
+  getSessionMessages,
+  renameSession,
+  deleteSession,
+  forkSession,
+} from "@anthropic-ai/claude-agent-sdk";
 import { config, sttConfigured, mcpConfigured, mcpServers } from "./config.js";
 import {
   listCodeRepos,
@@ -472,6 +478,58 @@ wss.on("connection", (ws: WebSocket) => {
         return;
       }
 
+      // Watch replies with a sensor value the read_health/get_location tool asked for.
+      case "watch_reply":
+        us.claude?.resolveQuery(String(msg.id ?? ""), msg.data);
+        return;
+
+      case "models": {
+        const models = (await us.claude?.models()) ?? [];
+        send({ type: "models_result", models });
+        return;
+      }
+
+      case "plan_usage": {
+        const usage = await us.claude?.planUsage();
+        send({ type: "plan_usage_result", usage: usage ?? null });
+        return;
+      }
+
+      // --- Session management (Chats): rename / delete / branch ------------
+      case "rename_session":
+        try {
+          await renameSession(String(msg.id ?? ""), String(msg.title ?? ""), { dir: chatsDir() });
+          send({ type: "session_renamed", id: msg.id, title: msg.title });
+        } catch (err) {
+          send({ type: "error", message: `rename failed: ${String(err).slice(0, 80)}` });
+        }
+        return;
+
+      case "delete_session":
+        try {
+          await deleteSession(String(msg.id ?? ""), { dir: chatsDir() });
+          send({ type: "session_deleted", id: msg.id });
+        } catch (err) {
+          send({ type: "error", message: `delete failed: ${String(err).slice(0, 80)}` });
+        }
+        return;
+
+      case "branch_session": {
+        try {
+          const fork = await forkSession(String(msg.id ?? ""), { dir: chatsDir() });
+          us.cwd = chatsDir();
+          us.contextLabel = "Branch";
+          us.systemPrompt = undefined;
+          applyScope(us, "chat");
+          us.rebuildClaude(fork.sessionId);
+          send({ type: "chat_opened", context: us.contextLabel, kind: "chat" });
+          await replayHistory(fork.sessionId, us.cwd);
+        } catch (err) {
+          send({ type: "error", message: `branch failed: ${String(err).slice(0, 80)}` });
+        }
+        return;
+      }
+
       case "report":
         addReport(String(msg.reason ?? "user_report"), String(msg.text ?? ""));
         send({ type: "reported" });
@@ -525,6 +583,7 @@ server.listen(config.port, () => {
   console.log(`  demoMode:   ${config.demoMode}`);
   console.log(`  suggest:    ${config.promptSuggestions}  progress: ${config.agentProgress}`);
   console.log(`  sandbox:    ${config.sandbox}  checkpointing: ${config.checkpointing}`);
+  console.log(`  watchTools: ${config.watchTools}  skills: ${config.skills || "off"}`);
   console.log(`  mcp:        ${mcpConfigured() ? Object.keys(mcpServers()).join(", ") : "none"}`);
   console.log(`  stt:        ${sttConfigured() ? "configured" : "not configured"}`);
   console.log(`  push:       ${pushConfigured() ? "configured" : "not configured (logs instead)"}`);
