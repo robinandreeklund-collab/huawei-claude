@@ -19,7 +19,7 @@ android {
         // directly over WSS. Override per-build with -PbaseUrl=... or edit it in
         // the app's pairing screen (⚙ Server), which persists an override.
         val baseUrl = (project.findProperty("baseUrl") as String?)
-            ?: "https://huawei-claude-backend.onrender.com"
+            ?: "https://huawei-claude-backend-uzd9.onrender.com"
         buildConfigField("String", "DEFAULT_BASE_URL", "\"$baseUrl\"")
     }
 

@@ -15,7 +15,7 @@ OS-klockor (Pixel Watch, TicWatch …).
    - lämna default och ändra den på klockan: både **Pair**-skärmen (`⚙ <host>`)
      och **Settings → Server** låter dig klistra in URL:en (sparas lokalt och
      återansluter direkt).
-   Default är `https://huawei-claude-backend.onrender.com`.
+   Default är `https://huawei-claude-backend-uzd9.onrender.com`.
 3. Para ihop din Galaxy Watch med datorn (Wireless debugging i klockans
    utvecklarläge) och kör appen från Android Studio, **eller** kör på en
    Wear OS-emulator (Wear OS Large Round, API 34+).
