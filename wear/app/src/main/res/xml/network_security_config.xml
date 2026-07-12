@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Production traffic stays HTTPS-only. Cleartext is permitted solely for a
+     backend running on the developer's own machine, reached from the emulator
+     via 10.0.2.2 (host loopback) or from a device on localhost. This keeps the
+     Play-store default (no global cleartext) while allowing local testing. -->
+<network-security-config>
+    <domain-config cleartextTrafficPermitted="true">
+        <domain includeSubdomains="false">10.0.2.2</domain>
+        <domain includeSubdomains="false">localhost</domain>
+        <domain includeSubdomains="false">127.0.0.1</domain>
+    </domain-config>
+</network-security-config>

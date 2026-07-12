@@ -2,3 +2,7 @@ node_modules/
 dist/
 *.log
 .env
+
+# Model A: provisioned agent/env IDs and per-user accounts (contains API keys)
+cma-ids.json
+*accounts*.json

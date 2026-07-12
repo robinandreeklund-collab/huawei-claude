@@ -24,6 +24,8 @@ import { config, sttConfigured, mcpConfigured, mcpServers } from "./config.js";
 import {
   listCodeRepos,
   codeRepoPath,
+  listCodeHistory,
+  codeHistoryCwd,
   listAppProjects,
   appProject,
   chatsDir,
@@ -42,7 +44,12 @@ import {
   deleteAccount,
   addReport,
   setPushToken,
+  tokenForUserCode,
+  setSessionAccount,
+  accountIdForToken,
 } from "./auth.js";
+import { createAccount, isApiKey, publicAccount, apiKeyForAccount } from "./accounts.js";
+import * as cma from "./cma.js";
 import { getOrCreateSession, disposeSession, type UserSession } from "./user-session.js";
 import { transcribe, SttNotConfiguredError } from "./stt.js";
 import { pushConfigured } from "./config.js";
@@ -50,6 +57,14 @@ import { loadCred, isConnected, credStatus, setCred, validToken, probeAccount } 
 
 const execFileP = promisify(execFile);
 const PUBLIC_DIR = join(dirname(fileURLToPath(import.meta.url)), "..", "public");
+
+// Model A: when CMA_MODE is on, the Claude Code surface is driven by Managed
+// Agents using each user's OWN Anthropic API key (from their account), instead
+// of the local Agent SDK. Everything runs on the user's account, billed to them.
+const CMA_MODE = /^(1|true|yes|on)$/i.test(process.env.CMA_MODE || "");
+const CMA_MODEL = process.env.CMA_MODEL || "claude-sonnet-5";
+const CMA_DEMO_REPO = process.env.DEMO_REPO_URL || ""; // optional repo for new sessions
+const CMA_DEMO_GH = process.env.DEMO_GITHUB_TOKEN || "";
 
 await mkdir(config.workspaceDir, { recursive: true });
 await seedWorkspaceIfEmpty(config.workspaceDir);
@@ -214,6 +229,32 @@ const server = createServer(async (req, res) => {
     return json(res, 200, { ...credStatus(), adminRequired: Boolean(config.adminSecret) });
   }
 
+  // --- Model A onboarding: create an account + paste your own API key -----
+  if (path === "/setup" && req.method === "GET") {
+    return serveFile(res, "setup.html", "text/html; charset=utf-8");
+  }
+  if (path === "/setup/complete" && req.method === "POST") {
+    const { code, name, email, apiKey } = await readBody(req);
+    if (!isApiKey(String(apiKey ?? ""))) {
+      return json(res, 400, { error: "invalid API key — expected an sk-ant-api… key from console.anthropic.com" });
+    }
+    // Create the account (holds the user's own key), then approve the pairing
+    // and link the freshly-minted session token to that account so the watch's
+    // connection acts on the user's own Anthropic account.
+    const account = await createAccount({
+      name: String(name ?? ""),
+      email: email ? String(email) : undefined,
+      apiKey: String(apiKey),
+    });
+    const approved = approveUserCode(String(code ?? ""));
+    if (!approved) {
+      return json(res, 400, { error: "pairing code expired — re-scan the watch" });
+    }
+    const token = tokenForUserCode(String(code ?? ""));
+    if (token) setSessionAccount(token, account.id);
+    return json(res, 200, { ok: true, account: publicAccount(account) });
+  }
+
   // --- Device flow -------------------------------------------------------
   if (path === "/device/code" && req.method === "POST") {
     const dc = createDeviceCode(baseUrl(req));
@@ -319,6 +360,87 @@ wss.on("connection", (ws: WebSocket) => {
     us.claude.prompt(text);
   };
 
+  // --- Model A: per-connection Managed Agents (CMA) state ------------------
+  // The user's own API key (resolved at auth from their account), the CMA
+  // session currently open, and the live SSE→watch translation loop.
+  let cmaKey: string | undefined;
+  let cmaSessionId: string | null = null;
+  let cmaAbort: AbortController | null = null;
+
+  const cmaCfg = (): cma.CmaConfig | null => (cmaKey ? { apiKey: cmaKey, model: CMA_MODEL } : null);
+  const cmaReady = () => CMA_MODE && Boolean(cmaKey);
+  const cmaActive = () => cmaReady() && Boolean(cmaSessionId);
+
+  const cmaDetach = () => {
+    cmaAbort?.abort();
+    cmaAbort = null;
+    cmaSessionId = null;
+  };
+
+  // Open (or re-open) a CMA session on this socket: replay its history, then
+  // translate the live event stream into the watch's protocol.
+  const cmaAttach = async (sessionId: string) => {
+    const cfg = cmaCfg();
+    if (!cfg) return;
+    cmaDetach();
+    cmaSessionId = sessionId;
+    const abort = new AbortController();
+    cmaAbort = abort;
+
+    try {
+      const past = await cma.listEvents(cfg, sessionId);
+      const items = past
+        .filter((e) => e.type === "agent.message" || e.type === "user.message")
+        .map((e) => ({
+          role: e.type === "user.message" ? "user" : "assistant",
+          text: (e.content || []).filter((b) => b.type === "text").map((b) => b.text || "").join(""),
+        }))
+        .filter((it) => it.text);
+      if (items.length) send({ type: "history", items });
+    } catch {
+      /* no history */
+    }
+
+    void (async () => {
+      try {
+        for await (const ev of cma.streamEvents(cfg, sessionId, abort.signal)) {
+          if (abort.signal.aborted) break;
+          switch (ev.type) {
+            case "session.status_running":
+              send({ type: "accepted" });
+              break;
+            case "agent.message": {
+              const text = (ev.content || []).filter((b) => b.type === "text").map((b) => b.text || "").join("");
+              if (text) send({ type: "assistant", text, streamed: false });
+              break;
+            }
+            case "agent.tool_use":
+            case "agent.mcp_tool_use":
+              if (ev.evaluated_permission === "ask" && ev.id) {
+                send({ type: "needs_confirmation", id: ev.id, tool: ev.name || "tool", command: "" });
+              } else {
+                send({ type: "tool_use", name: ev.name || "tool" });
+              }
+              break;
+            case "session.status_idle":
+              if (ev.stop_reason?.type !== "requires_action") send({ type: "turn_done" });
+              break;
+            case "session.status_terminated":
+              send({ type: "stopped" });
+              break;
+            case "session.error":
+              send({ type: "error", message: ev.error?.message || "session error" });
+              break;
+          }
+        }
+      } catch (e) {
+        if ((e as Error).name !== "AbortError") {
+          send({ type: "error", message: `cma stream: ${(e as Error).message.slice(0, 80)}` });
+        }
+      }
+    })();
+  };
+
   // Render a resumed session's prior messages so the chat opens with history,
   // not an empty feed (getSessionMessages).
   const replayHistory = async (sessionId: string | undefined, dir: string) => {
@@ -359,7 +481,10 @@ wss.on("connection", (ws: WebSocket) => {
           applyScope(us, "chat");
           us.rebuildClaude();
         }
-        send({ type: "authed", consented: hasConsent(token), demoMode: config.demoMode, push: pushConfigured(), claude: isConnected(), planMode: us.planMode });
+        // Model A: this connection acts on the user's own account/key.
+        cmaKey = CMA_MODE ? apiKeyForAccount(accountIdForToken(token)) : undefined;
+        const claudeConnected = CMA_MODE ? cmaReady() : isConnected();
+        send({ type: "authed", consented: hasConsent(token), demoMode: config.demoMode, push: pushConfigured(), claude: claudeConnected, planMode: us.planMode });
       } else {
         send({ type: "error", message: "invalid or expired token" });
         ws.close();
@@ -388,9 +513,24 @@ wss.on("connection", (ws: WebSocket) => {
       case "background": us.setForeground(false); return;
       case "foreground": us.setForeground(true); return;
 
-      case "prompt":
-        if (typeof msg.text === "string") runPrompt(msg.text);
+      case "prompt": {
+        const text = msg.text;
+        if (typeof text !== "string") return;
+        if (cmaActive()) {
+          if (!hasConsent(token)) return send({ type: "needs_consent" });
+          if (!allowRequest(token, config.rateLimitPerMin)) return send({ type: "error", message: "rate limit — wait a moment" });
+          send({ type: "accepted" });
+          const cfg = cmaCfg();
+          try {
+            if (cfg) await cma.sendMessage(cfg, cmaSessionId!, text);
+          } catch (e) {
+            send({ type: "error", message: `cma: ${(e as Error).message.slice(0, 80)}` });
+          }
+          return;
+        }
+        runPrompt(text);
         return;
+      }
 
       // --- Navigation: the three Claude surfaces --------------------------
       case "list": {
@@ -411,18 +551,29 @@ wss.on("connection", (ws: WebSocket) => {
               subtitle: "project",
             }));
             send({ type: "list_result", scope, items });
+          } else if (scope === "code" && cmaReady()) {
+            // Model A: the user's own hosted Claude Code sessions (CMA), on their
+            // own account, newest first.
+            const cfg = cmaCfg()!;
+            const sessions = await cma.listSessions(cfg, token).catch(() => []);
+            const items = sessions.map((s) => ({
+              id: s.id,
+              title: s.title || s.id.slice(0, 8),
+              subtitle: s.status || "",
+            }));
+            send({ type: "list_result", scope, items });
           } else if (scope === "code") {
-            const repos = await listCodeRepos();
-            const items = await Promise.all(
-              repos.map(async (r) => {
-                const last = await listSessions({ dir: r.path, limit: 1 }).catch(() => []);
-                return {
-                  id: r.id,
-                  title: r.title,
-                  subtitle: last[0] ? relTime(last[0].lastModified) : "no work yet",
-                };
-              }),
-            );
+            // Real Claude Code history from ~/.claude/projects (every project you
+            // have worked in on this machine), newest first. Falls back to the
+            // seeded demo repos only if there is no CLI history yet.
+            const history = await listCodeHistory();
+            const items = history.length
+              ? history.map((h) => ({
+                  id: h.id,
+                  title: h.title,
+                  subtitle: h.branch ? `${h.branch} · ${relTime(h.lastModified)}` : relTime(h.lastModified),
+                }))
+              : (await listCodeRepos()).map((r) => ({ id: r.id, title: r.title, subtitle: "no work yet" }));
             send({ type: "list_result", scope, items });
           } else {
             send({ type: "error", message: "unknown scope" });
@@ -434,6 +585,19 @@ wss.on("connection", (ws: WebSocket) => {
       }
 
       case "new_chat":
+        if (cmaReady()) {
+          const cfg = cmaCfg()!;
+          try {
+            const p = await cma.ensureProvisioned(cfg, "./cma-ids.json");
+            const repo = CMA_DEMO_REPO && CMA_DEMO_GH ? { url: CMA_DEMO_REPO, token: CMA_DEMO_GH } : undefined;
+            const s = await cma.createSession(cfg, p, repo, token, "Claude Code");
+            send({ type: "chat_opened", context: "Claude Code", kind: "code" });
+            await cmaAttach(s.id);
+          } catch (e) {
+            send({ type: "error", message: `cma new: ${(e as Error).message.slice(0, 80)}` });
+          }
+          return;
+        }
         us.cwd = chatsDir();
         us.contextLabel = "New chat";
         us.systemPrompt = undefined;
@@ -470,10 +634,18 @@ wss.on("connection", (ws: WebSocket) => {
       }
 
       case "open_code": {
-        const repo = codeRepoPath(String(msg.id ?? ""));
+        if (cmaReady()) {
+          const id = String(msg.id ?? "");
+          if (!id) return send({ type: "error", message: "invalid session" });
+          send({ type: "chat_opened", context: "Claude Code", kind: "code" });
+          await cmaAttach(id); // resume: replays history, then streams live
+          return;
+        }
+        // Prefer the real CLI-history cwd; fall back to a seeded demo repo path.
+        const repo = (await codeHistoryCwd(String(msg.id ?? ""))) ?? codeRepoPath(String(msg.id ?? ""));
         if (!repo) return send({ type: "error", message: "invalid repo" });
         us.cwd = repo;
-        us.contextLabel = String(msg.id);
+        us.contextLabel = repo.replace(/[/\\]+$/, "").split(/[/\\]/).pop() || String(msg.id);
         us.systemPrompt = undefined;
         applyScope(us, "code");
         const last = await listSessions({ dir: us.cwd, limit: 1 }).catch(() => []);
@@ -485,11 +657,30 @@ wss.on("connection", (ws: WebSocket) => {
 
       // --- Runtime controls (SDK streaming-input methods) -----------------
       case "stop":
+        if (cmaActive()) {
+          const cfg = cmaCfg();
+          try {
+            if (cfg) await cma.interrupt(cfg, cmaSessionId!);
+          } catch {
+            /* best effort */
+          }
+          send({ type: "stopped" });
+          return;
+        }
         await us.claude?.interrupt();
         send({ type: "stopped" });
         return;
 
       case "confirm":
+        if (cmaActive()) {
+          const cfg = cmaCfg();
+          try {
+            if (cfg) await cma.confirmTool(cfg, cmaSessionId!, String(msg.id ?? ""), Boolean(msg.allow));
+          } catch {
+            /* best effort */
+          }
+          return;
+        }
         us.claude?.resolveConfirm(String(msg.id ?? ""), Boolean(msg.allow));
         return;
 
@@ -652,7 +843,10 @@ wss.on("connection", (ws: WebSocket) => {
 
   // Socket dropped: keep the Claude turn running server-side so it can finish and
   // push a notification. The session is torn down only after an idle grace period.
-  ws.on("close", () => us?.detach(ws));
+  ws.on("close", () => {
+    cmaDetach();
+    us?.detach(ws);
+  });
   ws.on("error", () => us?.detach(ws));
 });
 

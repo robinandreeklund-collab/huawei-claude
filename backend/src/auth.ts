@@ -24,6 +24,7 @@ interface DeviceRequest {
 interface Session {
   token: string;
   createdAt: number;
+  accountId?: string; // links this login to a multi-tenant account (model A)
 }
 
 // user_code (shown/typed on phone) -> device request
@@ -80,9 +81,11 @@ export function createDeviceCode(baseUrl: string): DeviceCodeResponse {
   byUserCode.set(userCode, req);
   byDeviceCode.set(deviceCode, req);
 
-  // The pairing QR opens the single /connect page, carrying the user_code so the
-  // phone can approve the watch AND connect Claude in one flow — no second QR.
-  const verificationUri = `${baseUrl}/connect`;
+  // The pairing QR opens a single phone page carrying the user_code. In CMA
+  // ("model A") mode that page is /setup — create an account + paste your own
+  // Anthropic API key. Otherwise it's /connect (paste a subscription token).
+  const cmaMode = /^(1|true|yes|on)$/i.test(process.env.CMA_MODE || "");
+  const verificationUri = `${baseUrl}/${cmaMode ? "setup" : "connect"}`;
   return {
     device_code: deviceCode,
     user_code: userCode,
@@ -102,6 +105,25 @@ export function approveUserCode(userCode: string): boolean {
   req.token = randomUUID();
   sessions.set(req.token, { token: req.token, createdAt: Date.now() });
   return true;
+}
+
+/** The session token minted for a just-approved user_code (to link an account). */
+export function tokenForUserCode(userCode: string): string | undefined {
+  return byUserCode.get(userCode.trim().toUpperCase())?.token;
+}
+
+/** Attach a multi-tenant account id to a session token (model A). */
+export function setSessionAccount(token: string, accountId: string): boolean {
+  const s = sessions.get(token);
+  if (!s) return false;
+  s.accountId = accountId;
+  return true;
+}
+
+/** Resolve the account id behind a session token (for per-user CMA calls). */
+export function accountIdForToken(token: string | undefined): string | undefined {
+  if (!token) return undefined;
+  return sessions.get(token)?.accountId;
 }
 
 export type TokenPoll =
