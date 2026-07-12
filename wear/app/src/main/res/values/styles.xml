@@ -1,0 +1,9 @@
+<resources>
+    <!-- Dark window background so there is no white flash before Compose draws. -->
+    <style name="AppSplashTheme" parent="@android:style/Theme.DeviceDefault">
+        <item name="android:windowBackground">@color/bg</item>
+        <item name="android:colorBackground">@color/bg</item>
+        <item name="android:windowNoTitle">true</item>
+        <item name="android:windowFullscreen">true</item>
+    </style>
+</resources>
