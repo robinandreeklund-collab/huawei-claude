@@ -16,6 +16,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontFamily
@@ -141,8 +142,11 @@ private fun Bubble(m: ChatMsg) {
 
 @Composable
 private fun BubbleBox(bg: androidx.compose.ui.graphics.Color, fg: androidx.compose.ui.graphics.Color, content: @Composable () -> Unit) {
+    // Cap bubbles at ~74% of the screen width so they read as chat bubbles on every
+    // size — narrower on small round faces, wider on 466 px ones.
+    val maxW = (LocalConfiguration.current.screenWidthDp * 0.74f).dp
     Box(
-        Modifier.widthIn(max = 168.dp).clip(RoundedCornerShape(18.dp)).background(bg).padding(horizontal = 10.dp, vertical = 7.dp),
+        Modifier.widthIn(max = maxW).clip(RoundedCornerShape(18.dp)).background(bg).padding(horizontal = 10.dp, vertical = 7.dp),
     ) { content() }
 }
 

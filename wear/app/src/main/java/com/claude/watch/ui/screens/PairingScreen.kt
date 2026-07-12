@@ -6,6 +6,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -22,6 +23,9 @@ import com.claude.watch.ui.theme.Muted
 @Composable
 fun PairingScreen(vm: WatchViewModel, onEditServer: () -> Unit) {
     val state = rememberScalingLazyListState()
+    // Scale the QR to the screen: ~56% of width, clamped so it stays scannable on
+    // the smallest round faces and doesn't dominate the largest ones.
+    val qrSize = (LocalConfiguration.current.screenWidthDp * 0.56f).dp.coerceIn(104.dp, 132.dp)
     ScalingLazyColumn(
         state = state,
         modifier = Modifier.fillMaxSize(),
@@ -29,7 +33,7 @@ fun PairingScreen(vm: WatchViewModel, onEditServer: () -> Unit) {
         contentPadding = PaddingValues(top = 26.dp, bottom = 40.dp),
     ) {
         item { Text("Pair", style = MaterialTheme.typography.title2, color = Ink) }
-        item { QrImage(vm.pairQr, 120.dp) }
+        item { QrImage(vm.pairQr, qrSize) }
         item {
             Text(
                 vm.userCode.ifEmpty { "· · · ·" },

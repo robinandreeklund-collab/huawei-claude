@@ -6,6 +6,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
@@ -23,6 +24,7 @@ import com.claude.watch.ui.theme.Muted
 @Composable
 fun ConnectClaudeScreen(vm: WatchViewModel) {
     val state = rememberScalingLazyListState()
+    val qrSize = (LocalConfiguration.current.screenWidthDp * 0.56f).dp.coerceIn(104.dp, 132.dp)
     ScalingLazyColumn(
         state = state,
         modifier = Modifier.fillMaxSize(),
@@ -30,7 +32,7 @@ fun ConnectClaudeScreen(vm: WatchViewModel) {
         contentPadding = PaddingValues(top = 26.dp, bottom = 40.dp),
     ) {
         item { Text("Connect Claude", style = MaterialTheme.typography.title3, color = Ink) }
-        item { QrImage(vm.connectQr, 120.dp) }
+        item { QrImage(vm.connectQr, qrSize) }
         item {
             Text(
                 "Scan to open",
