@@ -994,6 +994,12 @@
         document.getElementById("text").addEventListener("keydown", (e) => { if (e.key === "Enter") { e.stopPropagation(); sendText(); } });
 
         const mic = document.getElementById("mic");
+        // Preferred: transcribe on the watch itself via the webview's speech
+        // recognition — the audio never leaves the device or reaches our backend,
+        // we only send the finished text. Falls back to server STT when the
+        // webview has no SpeechRecognition (then audio is streamed to the backend).
+        const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+        if (SR) { wireOnDeviceVoice(mic, SR); return; }
         if (!meta.stt) { mic.onclick = () => setStatus("Voice not configured — use the keyboard"); return; }
         let micStream = null, micCancelled = false;
         const stopTracks = () => { if (micStream) { micStream.getTracks().forEach((t) => t.stop()); micStream = null; } };
@@ -1015,6 +1021,41 @@
           if (recorder && recorder.state !== "inactive") recorder.stop(); else stopTracks();
         };
         mic.addEventListener("pointerdown", start); mic.addEventListener("pointerup", stop); mic.addEventListener("pointerleave", stop);
+      }
+      // On-device voice: press-and-hold to talk. The webview transcribes locally
+      // and we send only the text — no audio to the backend. (On the real watch,
+      // HarmonyOS Core Speech Kit / ASR replaces this; see docs/on-device.md.)
+      function wireOnDeviceVoice(mic, SR) {
+        let recog = null, active = false, gotResult = false;
+        const bcp47 = () => TTS_LANG[lang] || navigator.language || "en-US";
+        const start = (e) => {
+          e.preventDefault();
+          if (active) return;
+          try {
+            recog = new SR();
+            recog.lang = bcp47();
+            recog.interimResults = false;
+            recog.maxAlternatives = 1;
+            gotResult = false;
+            recog.onresult = (ev) => {
+              const t = String(ev.results?.[0]?.[0]?.transcript || "").trim();
+              if (t) { gotResult = true; setStatus(""); sendPrompt(t); }
+            };
+            recog.onerror = (ev) => {
+              const err = ev && ev.error;
+              if (err === "not-allowed" || err === "service-not-allowed") setStatus("Mic denied");
+              else if (err === "no-speech") setStatus("Didn't catch that");
+              else if (err !== "aborted") setStatus("Voice error");
+            };
+            recog.onend = () => { active = false; mic.classList.remove("rec"); if (!gotResult) setTimeout(() => setStatus(""), 1200); };
+            recog.start();
+            active = true; gotResult = false; mic.classList.add("rec"); setStatus("Listening… release");
+          } catch { setStatus("Voice unavailable"); active = false; mic.classList.remove("rec"); }
+        };
+        const stop = (e) => { e && e.preventDefault(); if (recog && active) { try { recog.stop(); } catch {} } };
+        mic.addEventListener("pointerdown", start);
+        mic.addEventListener("pointerup", stop);
+        mic.addEventListener("pointerleave", stop);
       }
       async function sendAudio() {
         const mime = recMime || "audio/webm";

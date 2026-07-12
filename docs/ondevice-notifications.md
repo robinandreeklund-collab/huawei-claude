@@ -17,6 +17,7 @@ Ansvarsfördelning:
 | Haptik/vibration | Klocka (Vibrator Kit) | Kod nedan |
 | Lokal avisering i förgrund | Klocka (Notification Kit) | Kod nedan |
 | Förgrund/bakgrund-signal (`background`/`foreground`) | Klocka | Kod nedan |
+| Röstinmatning (tal → text) | Klocka (Core Speech Kit / ASR) | Kod nedan — transkriberas **på enheten**, inget ljud till backend |
 
 ---
 
@@ -135,6 +136,57 @@ function localNotify(title: string, body: string) {
   }).catch((e) => console.error('notify failed', e));
 }
 ```
+
+## 6. Röstinmatning på klockan (Core Speech Kit / ASR)
+
+Claude-**modellen** tar bara emot text (Agent SDK / Messages-API stödjer text,
+bilder, PDF — **inte ljud**). Röstläget i Claude-apparna är ett separat
+tal-till-text-lager framför modellen. Så för att "prata med Claude" måste tal
+transkriberas till text först — och det ska ske **på klockan**, så att inget
+ljud går via vår backend.
+
+På enheten görs det med HarmonyOS Core Speech Kit (on-device ASR): tryck-och-håll
+mikrofonen, transkribera lokalt, skicka bara den färdiga texten över WSS som en
+vanlig `prompt`. Ingen `audio_start`/`audio_chunk`/`audio_end` behövs.
+
+```ts
+import { speechRecognizer } from '@kit.CoreSpeechKit';
+
+let asr: speechRecognizer.SpeechRecognitionEngine | null = null;
+
+async function initAsr() {
+  asr = await speechRecognizer.createEngine({
+    language: langIsSwedish() ? 'zh-CN' : 'en-US', // välj stödd locale; verifiera på enhet
+    online: 0,                                     // 0 = on-device (inget moln)
+  });
+  asr.setListener({
+    onResult: (_id, res) => {
+      const text = String(res?.result ?? '').trim();
+      if (res?.isLast && text) {
+        ws?.send(JSON.stringify({ type: 'prompt', text })); // bara text — inget ljud
+      }
+    },
+    onError: (_id, code) => console.error('asr error', code),
+    onComplete: () => { /* mic-knappen tillbaka till vila */ },
+  });
+}
+
+// Tryck-och-håll: starta vid nedtryck, stoppa vid släpp.
+function startListening() {
+  asr?.startListening({ sessionId: 'watch', audioInfo: { audioType: 'pcm', sampleRate: 16000, soundChannel: 1, sampleBit: 16 } });
+}
+function stopListening() { asr?.finish('watch'); }
+```
+
+Behörighet krävs: `ohos.permission.MICROPHONE` (fråga användaren vid första
+röstanvändning). Verifiera exakta signaturer och stödda locales mot DevEco Studio
+på Watch Ultimate 2 — API:t kan skilja mellan HarmonyOS-versioner.
+
+> **Webb-demon** (`public/watch.html`) gör motsvarande i webview:n med
+> `SpeechRecognition`/`webkitSpeechRecognition` (`wireOnDeviceVoice`): transkriberar
+> i webbläsaren och skickar bara texten, med server-STT (`audio_*`) som reserv om
+> webview:n saknar taligenkänning. På den riktiga klockan ersätts det av Core
+> Speech Kit ovan så allt sker helt på enheten.
 
 ---
 
