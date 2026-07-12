@@ -80,7 +80,9 @@ export function createDeviceCode(baseUrl: string): DeviceCodeResponse {
   byUserCode.set(userCode, req);
   byDeviceCode.set(deviceCode, req);
 
-  const verificationUri = `${baseUrl}/login`;
+  // The pairing QR opens the single /connect page, carrying the user_code so the
+  // phone can approve the watch AND connect Claude in one flow — no second QR.
+  const verificationUri = `${baseUrl}/connect`;
   return {
     device_code: deviceCode,
     user_code: userCode,

@@ -194,8 +194,9 @@ const server = createServer(async (req, res) => {
     const account = await probeAccount();
     return json(res, 200, { connected: isConnected(), account });
   }
-  // QR that opens the /connect page on the phone (shown on the watch when Claude
-  // isn't connected yet — the second login step after device pairing).
+  // QR that opens the /connect page on the phone. Used only for mid-session
+  // recovery (credential lost) — first-time setup uses the single pairing QR,
+  // whose page connects Claude too, so no second QR is shown.
   if (path === "/connect/qr" && req.method === "GET") {
     const url = `${baseUrl(req)}/connect`;
     const qrDataUrl = await QRCode.toDataURL(url, { margin: 1, width: 320 });

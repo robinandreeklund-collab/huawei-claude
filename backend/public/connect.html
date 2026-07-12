@@ -117,6 +117,12 @@
         </div>
       </div>
 
+      <!-- Watch pairing banner (only when opened from the watch's QR with ?code) -->
+      <div id="pairBanner" class="status on" style="display:none">
+        <span class="dot"></span>
+        <div class="txt"><b id="pairTitle">Watch paired</b><div class="meta" id="pairMeta">This watch can now use Claude.</div></div>
+      </div>
+
       <div id="status" class="status">
         <span class="dot"></span>
         <div class="txt"><b id="stTitle">Checking…</b><div class="meta" id="stMeta">&nbsp;</div></div>
@@ -176,6 +182,27 @@
       const $ = (id) => document.getElementById(id);
       const statusEl = $("status");
       let adminRequired = false, busy = false;
+
+      // Step 0 — if the watch's pairing QR sent us here (?code=WXYZ-1234), approve
+      // the watch automatically so this one page pairs the watch AND connects Claude.
+      async function pairWatch() {
+        const code = new URLSearchParams(location.search).get("code");
+        if (!code) return;
+        const banner = $("pairBanner");
+        banner.style.display = "";
+        banner.className = "status"; $("pairTitle").textContent = "Pairing watch…"; $("pairMeta").textContent = " ";
+        try {
+          const r = await fetch("/login", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ user_code: code }) });
+          const data = await r.json();
+          if (data.approved) {
+            banner.className = "status on"; $("pairTitle").textContent = "Watch paired"; $("pairMeta").textContent = "Now connect Claude below.";
+          } else {
+            banner.className = "status off"; $("pairTitle").textContent = "Pairing expired"; $("pairMeta").textContent = "Restart the watch to get a fresh code.";
+          }
+        } catch {
+          banner.className = "status off"; $("pairTitle").textContent = "Couldn't pair the watch"; $("pairMeta").textContent = "Check your connection and reload.";
+        }
+      }
 
       const KIND = { subscription: "subscription", apikey: "API key" };
       const SRC = { stored: "pasted token", env: "environment variable", none: "" };
@@ -286,6 +313,7 @@
       $("token").addEventListener("keydown", (e) => { if (e.key === "Enter") connect(); });
       $("secret").addEventListener("keydown", (e) => { if (e.key === "Enter") connect(); });
       $("go").addEventListener("click", connect);
+      pairWatch();
       refresh();
     </script>
   </body>
