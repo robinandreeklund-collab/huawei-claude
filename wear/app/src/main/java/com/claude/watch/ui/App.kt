@@ -58,7 +58,7 @@ fun App(
             Route.HOME -> HomeScreen(vm)
             Route.LIST -> ListScreen(vm)
             Route.CHAT -> ChatScreen(vm, onVoice, onKeyboard)
-            Route.SETTINGS -> SettingsScreen(vm)
+            Route.SETTINGS -> SettingsScreen(vm, onEditServer)
         }
 
         vm.banner?.let { (title, body) ->

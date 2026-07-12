@@ -30,7 +30,7 @@ import com.claude.watch.ui.theme.Surface
 import com.claude.watch.ui.theme.Surface2
 
 @Composable
-fun SettingsScreen(vm: WatchViewModel) {
+fun SettingsScreen(vm: WatchViewModel, onEditServer: () -> Unit) {
     val state = rememberScalingLazyListState()
     val langs = listOf("" to "Auto", "svenska" to "SV", "english" to "EN")
 
@@ -92,7 +92,7 @@ fun SettingsScreen(vm: WatchViewModel) {
 
         item {
             Chip(
-                onClick = {},
+                onClick = onEditServer,
                 modifier = Modifier.fillMaxWidth(),
                 colors = ChipDefaults.secondaryChipColors(backgroundColor = Surface),
                 label = { Text("Server", color = Muted, maxLines = 1) },

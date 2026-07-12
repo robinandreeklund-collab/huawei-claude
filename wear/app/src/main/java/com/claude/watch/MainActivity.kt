@@ -31,10 +31,7 @@ class MainActivity : ComponentActivity() {
         remoteText(r, KEY_MSG)?.let { vm.sendPrompt(it) }
     }
     private val serverLauncher = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { r ->
-        remoteText(r, KEY_SRV)?.let { url ->
-            Config.setBaseUrl(this, url)
-            recreate()   // rebuild the ViewModel against the new backend URL
-        }
+        remoteText(r, KEY_SRV)?.let { url -> vm.setServer(url) }
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {

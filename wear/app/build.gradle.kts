@@ -1,17 +1,17 @@
 plugins {
     id("com.android.application")
-    id("org.jetbrains.kotlin.android")
+    // Kotlin support is built into AGP 9 — no kotlin.android plugin needed.
     id("org.jetbrains.kotlin.plugin.compose")
 }
 
 android {
     namespace = "com.claude.watch"
-    compileSdk = 34
+    compileSdk = 37        // required by androidx.core 1.19 / lifecycle 2.11
 
     defaultConfig {
         applicationId = "com.claude.watch"
         minSdk = 30            // Wear OS 3 (Galaxy Watch 4 and later)
-        targetSdk = 34         // Android 14 / Wear OS 5 (raise to 35 by 2026-08-31)
+        targetSdk = 37         // latest platform (satisfies Play's rolling target-API rule)
         versionCode = 1
         versionName = "1.0"
 
@@ -30,7 +30,8 @@ android {
 
     buildTypes {
         release {
-            isMinifyEnabled = false
+            isMinifyEnabled = true
+            isShrinkResources = true
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
         }
     }
@@ -39,17 +40,24 @@ android {
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
     }
-    kotlinOptions { jvmTarget = "17" }
+}
+
+// Configure the Kotlin toolchain via the modern compilerOptions DSL (works with
+// AGP 9's built-in Kotlin). AGP 9 defaults Java to 11; we pin 17 to match above.
+kotlin {
+    compilerOptions {
+        jvmTarget.set(org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_17)
+    }
 }
 
 dependencies {
-    val composeUi = "1.6.8"
-    val wearCompose = "1.4.0"
+    val composeUi = "1.11.4"
+    val wearCompose = "1.6.2"
 
-    implementation("androidx.core:core-ktx:1.13.1")
-    implementation("androidx.activity:activity-compose:1.9.2")
-    implementation("androidx.lifecycle:lifecycle-viewmodel-compose:2.8.6")
-    implementation("androidx.lifecycle:lifecycle-runtime-compose:2.8.6")
+    implementation("androidx.core:core-ktx:1.19.0")
+    implementation("androidx.activity:activity-compose:1.13.0")
+    implementation("androidx.lifecycle:lifecycle-viewmodel-compose:2.11.0")
+    implementation("androidx.lifecycle:lifecycle-runtime-compose:2.11.0")
 
     // Compose runtime/ui (non-wear parts)
     implementation("androidx.compose.ui:ui:$composeUi")
@@ -63,9 +71,9 @@ dependencies {
     implementation("androidx.wear.compose:compose-navigation:$wearCompose")
 
     // On-watch text entry (RemoteInput helper)
-    implementation("androidx.wear:wear-input:1.1.0")
+    implementation("androidx.wear:wear-input:1.2.0")
 
     // Networking (WebSocket + HTTP)
-    implementation("com.squareup.okhttp3:okhttp:4.12.0")
-    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.8.1")
+    implementation("com.squareup.okhttp3:okhttp:5.4.0")
+    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.11.0")
 }

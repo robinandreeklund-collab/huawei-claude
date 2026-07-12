@@ -21,13 +21,13 @@ class Api(private val base: String) {
         withContext(Dispatchers.IO) {
             val req = Request.Builder().url(base + path)
                 .post(body.toString().toRequestBody(jsonType)).build()
-            http.newCall(req).execute().use { r -> parse(r.body?.string()) }
+            http.newCall(req).execute().use { r -> parse(r.body.string()) }
         }
 
     suspend fun get(path: String): JSONObject =
         withContext(Dispatchers.IO) {
             val req = Request.Builder().url(base + path).get().build()
-            http.newCall(req).execute().use { r -> parse(r.body?.string()) }
+            http.newCall(req).execute().use { r -> parse(r.body.string()) }
         }
 
     private fun parse(s: String?): JSONObject =

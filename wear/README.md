@@ -12,12 +12,17 @@ OS-klockor (Pixel Watch, TicWatch …).
    Gradle — den hämtar Compose for Wear OS, OkHttp osv. automatiskt.
 2. Sätt din backend-URL (Render). Antingen:
    - bygg med `-PbaseUrl=https://din-app.onrender.com`, eller
-   - lämna default och ändra den på klockan: på **Pair**-skärmen finns en
-     `⚙ <host>`-knapp där du klistrar in URL:en (sparas lokalt).
+   - lämna default och ändra den på klockan: både **Pair**-skärmen (`⚙ <host>`)
+     och **Settings → Server** låter dig klistra in URL:en (sparas lokalt och
+     återansluter direkt).
    Default är `https://huawei-claude-backend.onrender.com`.
 3. Para ihop din Galaxy Watch med datorn (Wireless debugging i klockans
    utvecklarläge) och kör appen från Android Studio, **eller** kör på en
-   Wear OS-emulator (Wear OS Large Round, API 34).
+   Wear OS-emulator (Wear OS Large Round, API 34+).
+
+Bygga från terminal fungerar också via Gradle-wrappern:
+`./gradlew assembleDebug` (Android SDK krävs via `local.properties` eller
+`ANDROID_HOME`).
 
 ## Flöde (identiskt med de andra klienterna)
 

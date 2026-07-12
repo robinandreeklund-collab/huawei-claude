@@ -30,8 +30,8 @@ import org.json.JSONObject
  */
 class WatchViewModel(app: Application) : AndroidViewModel(app) {
 
-    private val base = Config.baseUrl(app)
-    private val api = Api(base)
+    private var base = Config.baseUrl(app)
+    private var api = Api(base)
     private var ws: WsClient? = null
 
     // --- Observable UI state ------------------------------------------------
@@ -65,6 +65,7 @@ class WatchViewModel(app: Application) : AndroidViewModel(app) {
     private var pollJob: Job? = null
     private var connectJob: Job? = null
     private var reconnectJob: Job? = null
+    private var reconnectAttempt = 0
     private var booted = false
 
     fun start() {
@@ -123,8 +124,12 @@ class WatchViewModel(app: Application) : AndroidViewModel(app) {
 
     private fun scheduleReconnect() {
         if (token == null || reconnectJob?.isActive == true) return
+        // Exponential backoff (2.5s → 5 → 10 → 20, capped at 30s) to spare the
+        // battery during longer outages. Reset once we're authed again.
+        val delayMs = (2500L shl reconnectAttempt.coerceAtMost(4)).coerceAtMost(30_000L)
+        reconnectAttempt++
         reconnectJob = viewModelScope.launch {
-            delay(2500)
+            delay(delayMs)
             if (token != null) connectWs()
         }
     }
@@ -132,6 +137,7 @@ class WatchViewModel(app: Application) : AndroidViewModel(app) {
     private fun handle(o: JSONObject) {
         when (o.optString("type")) {
             "authed" -> {
+                reconnectAttempt = 0
                 claudeConnected = o.optBoolean("claude")
                 val consented = o.optBoolean("consented")
                 settings = settings.copy(planMode = o.optBoolean("planMode"))
@@ -265,14 +271,35 @@ class WatchViewModel(app: Application) : AndroidViewModel(app) {
     fun report(text: String) { ws?.send("report") { put("reason", "user_report"); put("text", text) } }
     fun dismissBanner() { banner = null }
 
-    /** Server URL edited on the pairing screen — persist and restart pairing. */
+    /** Server URL edited on the pairing or settings screen — persist, tear down the
+     *  current session, and start a fresh pairing against the new backend. The
+     *  ViewModel survives Activity recreation, so we must rebuild `api`/`ws` here
+     *  ourselves rather than relying on a restart. */
     fun setServer(url: String) {
         if (url.isBlank()) return
         val ctx: Context = getApplication()
         Config.setBaseUrl(ctx, url)
-        // Relaunch is handled by the Activity (recreate); here we just reflect the
-        // new host immediately in case the field stays visible.
-        connectHost = Config.host(Config.baseUrl(ctx))
+        val newBase = Config.baseUrl(ctx)
+        if (newBase == base) return
+
+        // Tear down the old connection and any in-flight polling.
+        pollJob?.cancel(); connectJob?.cancel(); reconnectJob?.cancel()
+        ws?.close(); ws = null
+
+        // Point at the new backend.
+        base = newBase
+        api = Api(base)
+        connectHost = Config.host(base)
+
+        // Reset session + UI state, then pair from scratch.
+        token = null; deviceCode = null; claudeConnected = false
+        booted = false; streamingKey = null
+        messages.clear(); listItems = null; currentScope = null
+        suggestion = null; confirmation = null; banner = null
+        error = null; status = ""; running = false; typing = false
+        userCode = ""; pairQr = null; connectQr = null
+        route = Route.SPLASH
+        startPairing()
     }
 
     fun onBack(): Boolean = when (route) {
@@ -387,7 +414,7 @@ class WatchViewModel(app: Application) : AndroidViewModel(app) {
         try {
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O)
                 v?.vibrate(VibrationEffect.createWaveform(longArrayOf(0, *pattern), -1))
-            else @Suppress("DEPRECATION") v?.vibrate(pattern)
+            else @Suppress("DEPRECATION") v?.vibrate(pattern, -1)
         } catch (_: Exception) {}
     }
 
