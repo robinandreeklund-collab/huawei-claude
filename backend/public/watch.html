@@ -83,7 +83,7 @@
       .card .t { font-size: 1.02rem; font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; line-height: 1.2; }
       .card .s { font-size: .74rem; color: var(--faint); margin-top: 2px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
       .card .chev { color: var(--faint); flex: 0 0 auto; }
-      .card.focus { background: var(--surface-2); box-shadow: inset 0 0 0 2px var(--clay); }
+      .card.focus { background: var(--surface-2); box-shadow: inset 0 0 0 2px var(--clay), 0 0 20px -4px rgba(217,119,87,.35); }
       .empty { position: absolute; inset: 0; display: grid; place-items: center; color: var(--faint); font-size: .82rem; }
 
       /* --- Chat (messaging-app style) --- */
@@ -265,19 +265,48 @@
         to { opacity: 0; transform: translate(-50%,-50%) scale(9); } }
 
       /* --- Motion & polish --- */
-      :root { --ease: cubic-bezier(.22,.61,.36,1); --spring: cubic-bezier(.34,1.56,.64,1); }
-      @keyframes slideFwd { from { opacity: 0; transform: translateX(26px); } to { opacity: 1; transform: none; } }
-      @keyframes slideBack { from { opacity: 0; transform: translateX(-26px); } to { opacity: 1; transform: none; } }
-      @keyframes fadeUp { from { opacity: 0; transform: translateY(9px); } to { opacity: 1; transform: none; } }
-      @keyframes bubbleIn { from { opacity: 0; transform: translateY(9px) scale(.98); } to { opacity: 1; transform: none; } }
+      :root { --ease: cubic-bezier(.22,.61,.36,1); --spring: cubic-bezier(.34,1.56,.64,1); --silk: cubic-bezier(.16,.84,.36,1); }
+      /* Screen changes do a gentle "focus pull" — slide + settle-scale + a whisper
+         of blur that resolves as the new screen lands. Reads as depth, not motion. */
+      @keyframes slideFwd { from { opacity: 0; transform: translateX(30px) scale(.985); filter: blur(5px); }
+        to { opacity: 1; transform: none; filter: blur(0); } }
+      @keyframes slideBack { from { opacity: 0; transform: translateX(-30px) scale(.985); filter: blur(5px); }
+        to { opacity: 1; transform: none; filter: blur(0); } }
+      @keyframes fadeUp { from { opacity: 0; transform: translateY(10px) scale(.99); filter: blur(3px); }
+        to { opacity: 1; transform: none; filter: blur(0); } }
+      @keyframes bubbleIn { from { opacity: 0; transform: translateY(10px) scale(.96); } to { opacity: 1; transform: none; } }
+      @keyframes rise { from { opacity: 0; transform: translateY(13px) scale(.975); } to { opacity: 1; transform: none; } }
       @keyframes spinSlow { to { transform: rotate(360deg); } }
       @keyframes dotb { 0%,60%,100% { opacity: .3; transform: translateY(0); } 30% { opacity: 1; transform: translateY(-3px); } }
-      .card { transition: box-shadow .16s var(--ease), background .16s var(--ease); }
-      .mrow { animation: bubbleIn .26s var(--ease); }
+      @keyframes caretBlink { 0%,45% { opacity: 1; } 55%,100% { opacity: 0; } }
+      @keyframes cbtnBreathe { 0%,100% { box-shadow: 0 6px 18px rgba(193,95,60,.4), 0 0 0 0 rgba(217,119,87,0); }
+        50% { box-shadow: 0 6px 20px rgba(193,95,60,.46), 0 0 0 7px rgba(217,119,87,.07); } }
+      .card { transition: box-shadow .18s var(--ease), background .18s var(--ease), transform .18s var(--silk); }
+      .mrow { animation: bubbleIn .28s var(--spring); }
       .chip { transition: transform .1s, background .12s; } .chip:active { transform: scale(.93); }
-      .pill { transition: transform .1s, background .12s; } .pill:active { transform: scale(.96); }
+      .pill { transition: transform .12s var(--spring), background .12s; } .pill:active { transform: scale(.95); }
       .navttl { transition: opacity .15s; } .navttl:active { opacity: .6; }
       .center .burst { animation: spinSlow 16s linear infinite; }
+
+      /* Silky staggered cascade — surfaces that don't use the depth-wheel reveal
+         their rows one after another. Delays cover the tallest of these lists. */
+      .wheel.deck .card, .setwheel > *, .sheet .srow, .ctxmenu .ci, .seg { animation: rise .44s var(--silk) both; }
+      .wheel.deck .card:nth-child(1), .setwheel > *:nth-child(1), .sheet .srow:nth-child(1), .ctxmenu .ci:nth-child(1) { animation-delay: .03s; }
+      .wheel.deck .card:nth-child(2), .setwheel > *:nth-child(2), .sheet .srow:nth-child(2), .ctxmenu .ci:nth-child(2) { animation-delay: .08s; }
+      .wheel.deck .card:nth-child(3), .setwheel > *:nth-child(3), .sheet .srow:nth-child(3), .ctxmenu .ci:nth-child(3) { animation-delay: .13s; }
+      .setwheel > *:nth-child(4), .sheet .srow:nth-child(4), .ctxmenu .ci:nth-child(4) { animation-delay: .18s; }
+      .setwheel > *:nth-child(5), .sheet .srow:nth-child(5), .ctxmenu .ci:nth-child(5) { animation-delay: .23s; }
+      .setwheel > *:nth-child(6), .sheet .srow:nth-child(6) { animation-delay: .28s; }
+      .setwheel > *:nth-child(7), .sheet .srow:nth-child(7) { animation-delay: .33s; }
+      .setwheel > *:nth-child(n+8), .sheet .srow:nth-child(n+8) { animation-delay: .38s; }
+
+      /* Live streaming caret — a soft clay bar that blinks while tokens arrive. */
+      .bubble.in.streaming::after { content: ""; display: inline-block; width: 2px; height: .92em;
+        margin-left: 2px; vertical-align: -1px; border-radius: 2px; background: var(--clay);
+        animation: caretBlink 1.05s steps(1) infinite; }
+      /* Dock buttons feel alive at rest with a slow, low-amplitude glow-breath. */
+      .cbtn { animation: cbtnBreathe 4.2s var(--silk) infinite; }
+      .cbtn.rec { animation: none; }
       .thumb { position: absolute; right: 6px; width: 3.5px; border-radius: 3px; background: var(--muted);
         opacity: 0; transition: opacity .35s var(--ease); z-index: 4; pointer-events: none; }
       .tdots { display: inline-flex; gap: 4px; padding: .15rem .1rem; }
@@ -485,7 +514,7 @@
       function enter() {
         view.style.animation = "none"; void view.offsetWidth;
         if (dir !== "none")
-          view.style.animation = dir === "back" ? "slideBack .28s var(--ease)" : dir === "fade" ? "fadeUp .22s var(--ease)" : "slideFwd .28s var(--ease)";
+          view.style.animation = dir === "back" ? "slideBack .34s var(--silk)" : dir === "fade" ? "fadeUp .3s var(--silk)" : "slideFwd .34s var(--silk)";
         dir = "fwd";
       }
       function afterRender() {
@@ -741,7 +770,7 @@
         if (curStream) endStream(); // a new text block began before the last one closed
         hideTyping(); const feed = document.getElementById("feed"); if (!feed) return;
         const row = document.createElement("div"); row.className = "mrow in";
-        const b = document.createElement("div"); b.className = "bubble in";
+        const b = document.createElement("div"); b.className = "bubble in streaming";
         const tn = document.createTextNode(""); b.appendChild(tn); // O(1)-appendable text node
         const t = document.createElement("div"); t.className = "time"; t.textContent = nowTime();
         row.appendChild(b); row.appendChild(t); feed.appendChild(row);
@@ -754,12 +783,12 @@
         curStream.textNode.appendData(text); // O(1) per token, no full-string rewrite
         scrollFeedSoon();
       }
-      function filterStream() { if (!curStream) startStream(); curStream.filtered = true; curStream.bubble.classList.add("filtered"); curStream.bubble.textContent = "…"; }
-      function endStream() { if (curStream) { streamQueue.push(curStream); curStream = null; } }
+      function filterStream() { if (!curStream) startStream(); curStream.filtered = true; curStream.bubble.classList.remove("streaming"); curStream.bubble.classList.add("filtered"); curStream.bubble.textContent = "…"; }
+      function endStream() { if (curStream) { curStream.bubble.classList.remove("streaming"); streamQueue.push(curStream); curStream = null; } }
       function reconcileAssistant(m) {
         const s = streamQueue.shift() || curStream; if (s === curStream) curStream = null;
         if (!s) { bubble("ai", m.text, { report: !m.filtered, filtered: m.filtered }); pendingAI += (m.text || "") + " "; return; }
-        const b = s.bubble;
+        const b = s.bubble; b.classList.remove("streaming");
         if (m.filtered) { b.classList.add("filtered"); b.textContent = m.text; }
         else {
           b.classList.remove("filtered"); b.textContent = m.text || b.textContent;
