@@ -1,0 +1,10 @@
+{
+  "name": "claude-watch-harmony",
+  "version": "1.0.0",
+  "description": "Claude — thin wearable client for HarmonyOS NEXT (Huawei Watch Ultimate 2)",
+  "main": "",
+  "author": "claude",
+  "license": "Apache-2.0",
+  "dependencies": {},
+  "devDependencies": {}
+}

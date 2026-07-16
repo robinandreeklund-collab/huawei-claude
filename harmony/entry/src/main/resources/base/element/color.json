@@ -1,0 +1,17 @@
+{
+  "color": [
+    { "name": "start_window_background", "value": "#262624" },
+    { "name": "clay", "value": "#D97757" },
+    { "name": "clay_deep", "value": "#C15F3C" },
+    { "name": "on_clay", "value": "#2A1A12" },
+    { "name": "bg", "value": "#262624" },
+    { "name": "surface", "value": "#1F1E1D" },
+    { "name": "surface2", "value": "#34322F" },
+    { "name": "ink", "value": "#F7F6F1" },
+    { "name": "muted", "value": "#B1ADA1" },
+    { "name": "faint", "value": "#86837C" },
+    { "name": "border", "value": "#3A3936" },
+    { "name": "ok", "value": "#7BBD8A" },
+    { "name": "err", "value": "#E0806A" }
+  ]
+}

@@ -1,0 +1,8 @@
+{
+  "string": [
+    { "name": "module_desc", "value": "Claude 穿戴客户端" },
+    { "name": "ability_desc", "value": "腕上的 Claude" },
+    { "name": "app_name", "value": "Claude" },
+    { "name": "reason_mic", "value": "对 Claude 说话——语音在本地转写，仅发送文本。" }
+  ]
+}

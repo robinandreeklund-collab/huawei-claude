@@ -1,0 +1,8 @@
+{
+  "string": [
+    { "name": "module_desc", "value": "Claude wearable client" },
+    { "name": "ability_desc", "value": "Claude on your wrist" },
+    { "name": "app_name", "value": "Claude" },
+    { "name": "reason_mic", "value": "Speak to Claude — speech is transcribed on-device and only the text is sent." }
+  ]
+}
